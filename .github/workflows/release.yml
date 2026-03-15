@@ -1,0 +1,123 @@
+# release.yml — Build wheels for all platforms and publish to PyPI.
+#
+# Triggered by pushing a version tag: git tag v0.1.0 && git push --tags
+# Uses PyPI trusted publisher (no API token needed).
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build a wheel for each platform using Zig cross-compilation
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            zig-target: x86_64-linux-gnu
+            lib-ext: so
+            python-include-cmd: "python3 -c \"import sysconfig; print(sysconfig.get_path('include'))\""
+            python-lib-cmd: "python3 -c \"import sysconfig; print(sysconfig.get_config_var('LIBDIR'))\""
+
+          - os: macos-latest
+            zig-target: aarch64-apple-macos
+            lib-ext: so
+            python-include-cmd: "python3 -c \"import sysconfig; print(sysconfig.get_path('include'))\""
+            python-lib-cmd: "python3 -c \"import sysconfig; print(sysconfig.get_config_var('LIBDIR'))\""
+
+          - os: windows-latest
+            zig-target: x86_64-windows-gnu
+            lib-ext: pyd
+            python-include-cmd: "python -c \"import sysconfig; print(sysconfig.get_path('include'))\""
+            python-lib-cmd: "python -c \"import sysconfig; print(sysconfig.get_config_var('BINDIR'))\""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Zig 0.13.0
+        uses: mlugg/setup-zig@v1
+        with:
+          version: "0.13.0"
+
+      - name: Get Python paths (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          echo "PY_INCLUDE=$(python3 -c \"import sysconfig; print(sysconfig.get_path('include'))\")" >> $GITHUB_ENV
+          echo "PY_LIB=$(python3 -c \"import sysconfig; print(sysconfig.get_config_var('LIBDIR'))\")" >> $GITHUB_ENV
+
+      - name: Get Python paths (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $inc = python -c "import sysconfig; print(sysconfig.get_path('include'))"
+          $lib = python -c "import sysconfig; print(sysconfig.get_config_var('BINDIR'))"
+          echo "PY_INCLUDE=$inc" >> $env:GITHUB_ENV
+          echo "PY_LIB=$lib" >> $env:GITHUB_ENV
+
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          zig build \
+            -Doptimize=ReleaseFast \
+            -Dpython-include="$PY_INCLUDE" \
+            -Dpython-lib="$PY_LIB"
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          zig build `
+            -Doptimize=ReleaseFast `
+            "-Dpython-include=$env:PY_INCLUDE" `
+            "-Dpython-lib=$env:PY_LIB"
+
+      - name: Copy extension to root for wheel packaging
+        shell: bash
+        run: |
+          cp zig-out/lib/nano_ffi.* .
+
+      - name: Install build
+        run: pip install build
+
+      - name: Build wheel
+        run: python -m build --wheel --no-isolation
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}
+          path: dist/*.whl
+
+  # ---------------------------------------------------------------------------
+  # Publish all wheels to PyPI via trusted publisher
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for trusted publisher OIDC
+
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

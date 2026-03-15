@@ -1,6 +1,6 @@
 [build-system]
-requires = ["scikit-build-core>=0.9"]
-build-backend = "scikit_build_core.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "nano-ffi"
@@ -19,21 +19,15 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fcarvajalbrown/nano-ffi"
-Issues   = "https://github.com/fcarvajalbrown/nano-ffi/issues"
+Homepage = "https://github.com/fcarvajalbrown/Nano-FII"
+Issues   = "https://github.com/fcarvajalbrown/Nano-FII/issues"
 
-# --- scikit-build-core config -------------------------------------------------
-[tool.scikit-build]
-# Point scikit-build-core at our build.zig instead of CMakeLists.txt
-build.tool = "zig"
-build.tool-args = [
-    "build",
-    "-Doptimize=ReleaseFast",
-    "-Dpython-include={python_include}",  # injected by scikit-build-core
-]
-wheel.packages = []          # no pure-Python packages, just the .so/.pyd
-install.components = ["nano_ffi"]
+[tool.setuptools]
+# No pure-Python packages — the extension is a pre-built .pyd/.so
+# dropped into the wheel by the CI workflow.
+packages = []
 
-[tool.scikit-build.cmake]
-# Disable CMake entirely — we are not using it
-build-type = "Release"
+[tool.setuptools.data-files]
+# Wheels include the compiled extension directly.
+# CI copies nano_ffi.pyd / nano_ffi.so here before building the wheel.
+"." = ["nano_ffi*.pyd", "nano_ffi*.so"]
