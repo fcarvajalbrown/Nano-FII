@@ -14,13 +14,8 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            lib-ext: so
-
           - os: macos-latest
-            lib-ext: so
-
           - os: windows-latest
-            lib-ext: pyd
 
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +41,8 @@ jobs:
         shell: pwsh
         run: |
           $inc = python -c "import sysconfig; print(sysconfig.get_path('include'))"
-          $lib = python -c "import sysconfig; print(sysconfig.get_config_var('BINDIR'))"
+          $bindir = python -c "import sysconfig; print(sysconfig.get_config_var('BINDIR'))"
+          $lib = Join-Path $bindir "libs"
           echo "PY_INCLUDE=$inc" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "PY_LIB=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
 
@@ -68,10 +64,14 @@ jobs:
             "-Dpython-lib=$env:PY_LIB" `
             "-Dpython-libname=python312"
 
+      - name: Debug output
+        shell: bash
+        run: find zig-out -type f || echo "zig-out empty or missing"
+
       - name: Copy extension to root
         shell: bash
         run: |
-          find zig-out -name "nano_ffi.*" | xargs -I{} cp {} .
+          find zig-out -name "nano_ffi.*" -exec cp {} . \;
           ls nano_ffi.* || (echo "No extension found" && exit 1)
 
       - name: Install build
