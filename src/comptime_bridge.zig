@@ -22,13 +22,13 @@ pub const ArgType = enum {
 /// Descriptor for a single function argument.
 pub const ArgDesc = struct {
     name: []const u8,
-    typ: ArgType,
+    typ:  ArgType,
 };
 
 /// Full signature descriptor passed to `makeTrampoline`.
 pub const Signature = struct {
-    args: []const ArgDesc,
-    ret: ArgType,
+    args:   []const ArgDesc,
+    ret:    ArgType,
 };
 
 /// Comptime trampoline factory.
@@ -44,7 +44,7 @@ pub const Signature = struct {
 ///   });
 pub fn makeTrampoline(
     comptime func: anytype,
-    comptime sig: Signature,
+    comptime sig:  Signature,
 ) type {
     return struct {
         /// The generated wrapper — this is what gets registered in the registry
@@ -74,15 +74,15 @@ pub fn makeTrampoline(
 
 /// A raw argument passed from Python as a tagged union.
 pub const RawArg = union(ArgType) {
-    i64: i64,
-    f64: f64,
+    i64:  i64,
+    f64:  f64,
     bool: bool,
 };
 
 /// A raw return value sent back to Python.
 pub const RawRet = union(ArgType) {
-    i64: i64,
-    f64: f64,
+    i64:  i64,
+    f64:  f64,
     bool: bool,
 };
 
@@ -92,13 +92,13 @@ pub const RawRet = union(ArgType) {
 
 /// Unpack a RawArg into the concrete Zig type expected by the function.
 inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
-    .i64 => i64,
-    .f64 => f64,
+    .i64  => i64,
+    .f64  => f64,
     .bool => bool,
 } {
     return switch (typ) {
-        .i64 => arg.i64,
-        .f64 => arg.f64,
+        .i64  => arg.i64,
+        .f64  => arg.f64,
         .bool => arg.bool,
     };
 }
@@ -106,8 +106,8 @@ inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
 /// Pack a Zig return value into a RawRet.
 inline fn pack(comptime typ: ArgType, value: anytype) RawRet {
     return switch (typ) {
-        .i64 => .{ .i64 = value },
-        .f64 => .{ .f64 = value },
+        .i64  => .{ .i64  = value },
+        .f64  => .{ .f64  = value },
         .bool => .{ .bool = value },
     };
 }
@@ -116,12 +116,8 @@ inline fn pack(comptime typ: ArgType, value: anytype) RawRet {
 // Tests
 // ---------------------------------------------------------------------------
 
-fn addInts(a: i64, b: i64) i64 {
-    return a + b;
-}
-fn mulFloats(a: f64, b: f64) f64 {
-    return a * b;
-}
+fn addInts(a: i64, b: i64) i64 { return a + b; }
+fn mulFloats(a: f64, b: f64) f64 { return a * b; }
 
 test "trampoline: integer add" {
     const T = makeTrampoline(addInts, .{

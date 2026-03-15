@@ -7,9 +7,9 @@
 const std = @import("std");
 
 pub const registry = @import("registry.zig");
-pub const bridge = @import("comptime_bridge.zig");
+pub const bridge    = @import("comptime_bridge.zig");
 pub const allocator = @import("allocator.zig");
-pub const python = @import("python_ext.zig");
+pub const python    = @import("python_ext.zig");
 
 // Re-export the Python module init symbol at the top level so the linker
 // finds it without extra flags.
