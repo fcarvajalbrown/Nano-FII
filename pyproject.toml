@@ -1,0 +1,39 @@
+[build-system]
+requires = ["scikit-build-core>=0.9"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "nano-ffi"
+version = "0.1.0"
+description = "Minimalist high-speed Python-to-Zig FFI bridge via comptime trampolines."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["ffi", "zig", "performance", "native", "extension"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Other",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/fcarvajalbrown/nano-ffi"
+Issues   = "https://github.com/fcarvajalbrown/nano-ffi/issues"
+
+# --- scikit-build-core config -------------------------------------------------
+[tool.scikit-build]
+# Point scikit-build-core at our build.zig instead of CMakeLists.txt
+build.tool = "zig"
+build.tool-args = [
+    "build",
+    "-Doptimize=ReleaseFast",
+    "-Dpython-include={python_include}",  # injected by scikit-build-core
+]
+wheel.packages = []          # no pure-Python packages, just the .so/.pyd
+install.components = ["nano_ffi"]
+
+[tool.scikit-build.cmake]
+# Disable CMake entirely — we are not using it
+build-type = "Release"
