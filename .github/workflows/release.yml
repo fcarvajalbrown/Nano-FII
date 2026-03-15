@@ -70,7 +70,9 @@ jobs:
 
       - name: Copy extension to root
         shell: bash
-        run: cp zig-out/lib/nano_ffi.* .
+        run: |
+          find zig-out -name "nano_ffi.*" | xargs -I{} cp {} .
+          ls nano_ffi.* || (echo "No extension found" && exit 1)
 
       - name: Install build
         run: pip install build
