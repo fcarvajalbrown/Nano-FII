@@ -1,0 +1,22 @@
+# Zig
+.zig-cache/
+zig-out/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.dylib
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Self
+notes.txt
