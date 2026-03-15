@@ -75,6 +75,13 @@ jobs:
             -Dpython-include="$PY_INCLUDE" \
             -Dpython-lib="$PY_LIB"
 
+      - name: Get Python lib name (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ver = python -c "import sys; print(f'python{sys.version_info.major}{sys.version_info.minor}')"
+          echo "PY_LIBNAME=$ver" >> $env:GITHUB_ENV
+
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -82,7 +89,8 @@ jobs:
           zig build `
             -Doptimize=ReleaseFast `
             "-Dpython-include=$env:PY_INCLUDE" `
-            "-Dpython-lib=$env:PY_LIB"
+            "-Dpython-lib=$env:PY_LIB" `
+            "-Dpython-libname=$env:PY_LIBNAME"
 
       - name: Copy extension to root for wheel packaging
         shell: bash

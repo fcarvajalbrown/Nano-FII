@@ -12,15 +12,15 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     // --- 1. Target & optimization mode ----------------------------------------
-    const target = b.standardTargetOptions(.{});
+    const target   = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     // --- 2. Shared library ----------------------------------------------------
     const lib = b.addSharedLibrary(.{
-        .name = "nano_ffi",
+        .name            = "nano_ffi",
         .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
+        .target          = target,
+        .optimize        = optimize,
     });
 
     // --- 3. Python headers ----------------------------------------------------
@@ -34,11 +34,14 @@ pub fn build(b: *std.Build) void {
     lib.linkLibC();
 
     // On Windows, link the Python import library explicitly.
+    // Pass -Dpython-libname=python312 (or 313, 314, etc.) to match the
+    // installed Python version. Defaults to python312 for CI compatibility.
     if (target.result.os.tag == .windows) {
         if (b.option([]const u8, "python-lib", "Path to Python libs dir (Windows)")) |lib_path| {
             lib.addLibraryPath(.{ .cwd_relative = lib_path });
         }
-        lib.linkSystemLibrary("python314");
+        const py_libname = b.option([]const u8, "python-libname", "Python lib name e.g. python312") orelse "python312";
+        lib.linkSystemLibrary(py_libname);
     }
 
     // --- 5. Install -----------------------------------------------------------
@@ -58,8 +61,8 @@ pub fn build(b: *std.Build) void {
     // --- 6. Unit tests --------------------------------------------------------
     const unit_tests = b.addTest(.{
         .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
+        .target          = target,
+        .optimize        = optimize,
     });
 
     const run_tests = b.addRunArtifact(unit_tests);
