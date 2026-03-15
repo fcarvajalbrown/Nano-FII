@@ -28,12 +28,15 @@ pub fn build(b: *std.Build) void {
         const py_libname = b.option([]const u8, "python-libname", "Python lib name") orelse "python312";
         lib.linkSystemLibrary(py_libname);
     } else if (os == .macos) {
-        // On macOS, link the Python framework directly
+        // macOS: link python3 framework and allow undefined symbols (resolved
+        // at runtime by the Python interpreter via dlopen).
         if (py_lib) |lp| if (lp.len > 0) lib.addLibraryPath(.{ .cwd_relative = lp });
         lib.linkSystemLibrary("python3");
+        lib.linker_allow_shlib_undefined = true;
+    } else {
+        // Linux: Python symbols are resolved at runtime — do not link libpython.
+        lib.linker_allow_shlib_undefined = true;
     }
-    // On Linux, Python symbols are resolved at runtime by the interpreter.
-    // No explicit link needed.
 
     // Windows: install as .pyd
     if (os == .windows) {

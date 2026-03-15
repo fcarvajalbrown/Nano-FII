@@ -34,25 +34,30 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           python3 -c "import sysconfig; print('PY_INCLUDE=' + sysconfig.get_path('include'))" >> $GITHUB_ENV
-          python3 -c "import sysconfig; v=sysconfig.get_config_var('LIBDIR'); print('PY_LIB=' + (v or ''))" >> $GITHUB_ENV
 
       - name: Get Python paths (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $inc = python -c "import sysconfig; print(sysconfig.get_path('include'))"
-          $bindir = python -c "import sysconfig; print(sysconfig.get_config_var('BINDIR'))"
-          $lib = Join-Path $bindir "libs"
+          $data = python -c "import sysconfig; print(sysconfig.get_path('data'))"
+          $lib = "$data\libs"
           echo "PY_INCLUDE=$inc" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "PY_LIB=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Build (Unix)
-        if: runner.os != 'Windows'
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
         run: |
           zig build \
             -Doptimize=ReleaseFast \
-            "-Dpython-include=$PY_INCLUDE" \
-            "-Dpython-lib=$PY_LIB"
+            "-Dpython-include=$PY_INCLUDE"
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          zig build \
+            -Doptimize=ReleaseFast \
+            "-Dpython-include=$PY_INCLUDE"
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
