@@ -1,50 +1,40 @@
 //! build.zig — Nano-FFI build script.
 //!
-//! Compiles the Zig core into a shared library (.so / .pyd) that Python can
-//! import directly. scikit-build-core invokes `zig build` during `pip install`.
-//!
 //! Usage:
 //!   zig build                          -> debug build
 //!   zig build -Doptimize=ReleaseFast   -> production build
-//!   zig build -Dtarget=x86_64-windows-gnu  -> cross-compile for Windows
 
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    // --- 1. Target & optimization mode ----------------------------------------
     const target   = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // --- 2. Shared library ----------------------------------------------------
     const lib = b.addSharedLibrary(.{
-        .name            = "nano_ffi",
+        .name             = "nano_ffi",
         .root_source_file = b.path("src/root.zig"),
-        .target          = target,
-        .optimize        = optimize,
+        .target           = target,
+        .optimize         = optimize,
     });
 
-    // --- 3. Python headers ----------------------------------------------------
+    // Python headers — required on all platforms
     if (b.option([]const u8, "python-include", "Path to Python include dir")) |inc| {
-        lib.addIncludePath(.{ .cwd_relative = inc });
-    } else {
-        lib.addIncludePath(.{ .cwd_relative = "C:/usr/include/python3" });
+        if (inc.len > 0) lib.addIncludePath(.{ .cwd_relative = inc });
     }
 
-    // --- 4. Link libc + Python ------------------------------------------------
     lib.linkLibC();
 
-    // On Windows, link the Python import library explicitly.
-    // Pass -Dpython-libname=python312 (or 313, 314, etc.) to match the
-    // installed Python version. Defaults to python312 for CI compatibility.
+    // Python lib dir — accepted on all platforms, used where needed
+    const py_lib = b.option([]const u8, "python-lib", "Path to Python lib dir");
+
     if (target.result.os.tag == .windows) {
-        if (b.option([]const u8, "python-lib", "Path to Python libs dir (Windows)")) |lib_path| {
-            lib.addLibraryPath(.{ .cwd_relative = lib_path });
+        if (py_lib) |lp| {
+            if (lp.len > 0) lib.addLibraryPath(.{ .cwd_relative = lp });
         }
         const py_libname = b.option([]const u8, "python-libname", "Python lib name e.g. python312") orelse "python312";
         lib.linkSystemLibrary(py_libname);
     }
 
-    // --- 5. Install -----------------------------------------------------------
     // On Windows Python expects nano_ffi.pyd, not nano_ffi.dll.
     if (target.result.os.tag == .windows) {
         const install_pyd = b.addInstallFileWithDir(
@@ -58,11 +48,10 @@ pub fn build(b: *std.Build) void {
         b.installArtifact(lib);
     }
 
-    // --- 6. Unit tests --------------------------------------------------------
     const unit_tests = b.addTest(.{
         .root_source_file = b.path("src/root.zig"),
-        .target          = target,
-        .optimize        = optimize,
+        .target           = target,
+        .optimize         = optimize,
     });
 
     const run_tests = b.addRunArtifact(unit_tests);
