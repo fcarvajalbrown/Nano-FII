@@ -96,21 +96,30 @@ def benchmark_nano_ffi():
 def benchmark_ctypes_baseline():
     """
     Baseline: equivalent ctypes call overhead for comparison.
+    Uses msvcrt on Windows, libm on Linux/macOS.
     """
     import ctypes
     import ctypes.util
+    import sys
 
-    libm = ctypes.CDLL(ctypes.util.find_library("m"))
-    libm.abs.argtypes = [ctypes.c_int]
-    libm.abs.restype  = ctypes.c_int
+    if sys.platform == "win32":
+        lib = ctypes.CDLL("msvcrt")
+        lib.abs.argtypes = [ctypes.c_int]
+        lib.abs.restype  = ctypes.c_int
+        fn = lambda: lib.abs(1)
+    else:
+        libm = ctypes.CDLL(ctypes.util.find_library("m"))
+        libm.fabs.argtypes = [ctypes.c_double]
+        libm.fabs.restype  = ctypes.c_double
+        fn = lambda: libm.fabs(1.0)
 
     # Warm up
     for _ in range(1000):
-        libm.abs(1)
+        fn()
 
     start = time.perf_counter_ns()
     for _ in range(BENCHMARK_ITERATIONS):
-        libm.abs(1)
+        fn()
     elapsed = time.perf_counter_ns() - start
 
     avg_ns = elapsed / BENCHMARK_ITERATIONS

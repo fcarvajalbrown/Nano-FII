@@ -43,17 +43,21 @@ pub const Signature = struct {
 ///       .ret  = .i64,
 ///   });
 pub fn makeTrampoline(
-    comptime func: anytype,
-    comptime sig:  Signature,
+    comptime func:      anytype,
+    comptime sig_param: Signature,
 ) type {
     return struct {
+        /// The signature used to generate this trampoline — stored alongside
+        /// the function pointer in the registry so the dispatcher can unpack args.
+        pub const sig: Signature = sig_param;
+
         /// The generated wrapper — this is what gets registered in the registry
         /// and called from python_ext.zig.
         pub fn call(args: [*]const RawArg) callconv(.C) RawRet {
             // Unpack each argument at comptime-known offsets — no runtime loop.
             const result = comptime_call: {
                 var typed_args: std.meta.ArgsTuple(@TypeOf(func)) = undefined;
-                inline for (sig.args, 0..) |desc, i| {
+                inline for (sig_param.args, 0..) |desc, i| {
                     typed_args[i] = unpack(desc.typ, args[i]);
                 }
                 break :comptime_call @call(.auto, func, typed_args);
