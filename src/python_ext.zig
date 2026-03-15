@@ -49,9 +49,9 @@ const MulTrampoline = bridge.makeTrampoline(zigMul, .{
 
 fn pyToRawArg(obj: *py.PyObject, typ: bridge.ArgType) !bridge.RawArg {
     return switch (typ) {
-        .i64  => .{ .i64  = @intCast(py.PyLong_AsLongLong(obj)) },
-        .f64  => .{ .f64  = py.PyFloat_AsDouble(obj) },
-        .bool => .{ .bool = py.PyObject_IsTrue(obj) == 1 },
+        .i64  => .{ .tag = .i64,  .val = .{ .i64  = @intCast(py.PyLong_AsLongLong(obj)) } },
+        .f64  => .{ .tag = .f64,  .val = .{ .f64  = py.PyFloat_AsDouble(obj) } },
+        .bool => .{ .tag = .bool, .val = .{ .bool = py.PyObject_IsTrue(obj) == 1 } },
     };
 }
 
@@ -60,10 +60,10 @@ fn pyToRawArg(obj: *py.PyObject, typ: bridge.ArgType) !bridge.RawArg {
 // ---------------------------------------------------------------------------
 
 fn rawRetToPy(ret: bridge.RawRet) ?*py.PyObject {
-    return switch (ret) {
-        .i64  => |v| py.PyLong_FromLongLong(v),
-        .f64  => |v| py.PyFloat_FromDouble(v),
-        .bool => |v| if (v) py.Py_True else py.Py_False,
+    return switch (ret.tag) {
+        .i64  => py.PyLong_FromLongLong(ret.val.i64),
+        .f64  => py.PyFloat_FromDouble(ret.val.f64),
+        .bool => py.PyBool_FromLong(if (ret.val.bool) 1 else 0),
     };
 }
 
@@ -119,7 +119,7 @@ fn py_call(self: ?*py.PyObject, args: ?*py.PyObject) callconv(.C) ?*py.PyObject 
     }
 
     // Call the trampoline
-    const trampoline: *const fn ([*]const bridge.RawArg) callconv(.C) bridge.RawRet = @ptrCast(entry.ptr);
+    const trampoline: *const fn ([*]const bridge.RawArg) callconv(.C) bridge.RawRet = @alignCast(@ptrCast(entry.ptr));
     const ret = trampoline(&raw_args);
 
     return rawRetToPy(ret);

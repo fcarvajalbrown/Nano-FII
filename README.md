@@ -13,20 +13,20 @@ Nano-FFI lets Python call Zig functions with near-zero overhead. Instead of runt
 ```python
 import nano_ffi
 
-result = nano_ffi.call("add", 3, 4)  # → 7
+result = nano_ffi.call("add", 3, 4)      # → 7
+result = nano_ffi.call("mul", 2.5, 4.0)  # → 10.0
 ```
 
 ---
 
 ## Benchmark
 
-| Library       | Avg call overhead |
-|---------------|-------------------|
-| ctypes        | ~150 ns           |
-| cffi          | ~130 ns           |
-| **Nano-FFI**  | **< 110 ns**      |
+| Library       | Avg call overhead | vs Nano-FFI |
+|---------------|-------------------|-------------|
+| ctypes        | ~340 ns           | 4.28x slower |
+| **Nano-FFI**  | **79.6 ns**       | **baseline** |
 
-> Measured on x86_64 Linux, `ReleaseFast` build, 100k iterations.
+> Measured on x86_64 Windows, `ReleaseFast` build, 100k iterations.
 > Run `python tests/test_python.py` to reproduce on your machine.
 
 ---
@@ -61,7 +61,9 @@ pip install -e .
 Or build manually:
 
 ```bash
-zig build -Doptimize=ReleaseFast
+zig build -Doptimize=ReleaseFast \
+  -Dpython-include=<path/to/python/include> \
+  -Dpython-lib=<path/to/python/libs>
 ```
 
 The compiled library lands in `zig-out/lib/`.
@@ -75,17 +77,17 @@ The compiled library lands in `zig-out/lib/`.
 ```python
 import nano_ffi
 
-# Integer addition
-result = nano_ffi.call("add", 3, 4)
+# Integer addition (built-in example)
+result = nano_ffi.call("add", 3, 4)        # → 7
 
-# Float multiplication
-result = nano_ffi.call("mul", 2.5, 4.0)
+# Float multiplication (built-in example)
+result = nano_ffi.call("mul", 2.5, 4.0)   # → 10.0
 
 # Check library version
-print(nano_ffi.version())  # → "0.1.0"
+print(nano_ffi.version())                  # → "0.1.0"
 ```
 
-### Registering a Zig function
+### Registering your own Zig function
 
 In your Zig code, use `comptime_bridge.makeTrampoline` to generate a wrapper and register it:
 
@@ -103,8 +105,8 @@ const AddTrampoline = bridge.makeTrampoline(add, .{
     .ret = .i64,
 });
 
-// Then register:
-try my_registry.register("add", AddTrampoline.asPtr());
+// Register at init time:
+try my_registry.register("add", AddTrampoline.asPtr(), AddTrampoline.sig);
 ```
 
 ---
@@ -113,14 +115,16 @@ try my_registry.register("add", AddTrampoline.asPtr());
 
 ```
 src/
-├── root.zig            # Entry point, re-exports PyInit_nano_ffi
-├── registry.zig        # AutoHashMap function pointer store
+├── root.zig            # Entry point, exports PyInit_nano_ffi
+├── registry.zig        # StringHashMap storing FnPtr + Signature
 ├── comptime_bridge.zig # Comptime trampoline generator (core)
 ├── allocator.zig       # Python-Zig memory boundary management
 └── python_ext.zig      # CPython C extension (only file touching Python.h)
 ```
 
-The key constraint: **only `python_ext.zig` is allowed to import `<Python.h>`**. Everything else is pure Zig with C-ABI compatible types.
+**Key constraint:** only `python_ext.zig` is allowed to import `<Python.h>`. Everything else is pure Zig with C-ABI compatible types.
+
+**How the speed works:** `makeTrampoline` uses Zig's `inline for` over the signature at compile time — the compiler sees explicit typed assignments, not a loop. No branches, no runtime type checks in the hot path.
 
 ---
 
@@ -130,8 +134,14 @@ The key constraint: **only `python_ext.zig` is allowed to import `<Python.h>`**.
 # Zig unit tests
 zig build test
 
-# Python end-to-end + benchmark
-zig build -Doptimize=ReleaseFast
+# Python end-to-end + benchmark (debug)
+zig build
+python tests/test_python.py
+
+# Benchmark (production numbers)
+zig build -Doptimize=ReleaseFast \
+  -Dpython-include=<path> \
+  -Dpython-lib=<path>
 python tests/test_python.py
 ```
 
@@ -151,8 +161,8 @@ zig build -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu
 
 ## Current limitations
 
-- Supported types: `i64`, `f64`, `bool` — slices and strings are planned for v0.2.0
-- Full call dispatch (TODO day-3) is not yet wired — `nano_ffi.call()` will raise `NotImplementedError` until that lands
+- Supported argument types: `i64`, `f64`, `bool` — slices and strings planned for v0.2.0
+- Max 8 arguments per function call
 
 ---
 

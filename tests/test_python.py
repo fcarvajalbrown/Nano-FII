@@ -89,7 +89,7 @@ def benchmark_nano_ffi():
 
     avg_ns = elapsed / BENCHMARK_ITERATIONS
     print(f"\n[benchmark] nano_ffi.call — {avg_ns:.1f} ns/call avg over {BENCHMARK_ITERATIONS:,} iterations")
-    print(f"[benchmark] target: <110 ns  |  {'PASS' if avg_ns < 110 else 'FAIL (dispatch not wired yet)'}")
+    print(f"[benchmark] target: <110 ns  |  {'PASS' if avg_ns < 110 else f'FAIL ({avg_ns:.0f}ns — run ReleaseFast for real numbers)'}")
     return avg_ns
 
 

@@ -12,7 +12,7 @@ const registry = @import("registry.zig");
 
 /// Supported scalar types for automatic marshalling.
 /// Extend this enum to add new type support.
-pub const ArgType = enum {
+pub const ArgType = enum(u8) {
     i64,
     f64,
     bool,
@@ -73,21 +73,27 @@ pub fn makeTrampoline(
 }
 
 // ---------------------------------------------------------------------------
-// Raw argument / return value types (C-ABI safe tagged unions)
+// Raw argument / return value types (C-ABI safe extern structs)
 // ---------------------------------------------------------------------------
+// Tagged unions cannot cross the C ABI boundary. We use an extern struct with
+// an explicit tag + a C-compatible union instead.
 
-/// A raw argument passed from Python as a tagged union.
-pub const RawArg = union(ArgType) {
+pub const RawValue = extern union {
     i64:  i64,
     f64:  f64,
     bool: bool,
 };
 
+/// A raw argument passed from Python.
+pub const RawArg = extern struct {
+    tag: ArgType,
+    val: RawValue,
+};
+
 /// A raw return value sent back to Python.
-pub const RawRet = union(ArgType) {
-    i64:  i64,
-    f64:  f64,
-    bool: bool,
+pub const RawRet = extern struct {
+    tag: ArgType,
+    val: RawValue,
 };
 
 // ---------------------------------------------------------------------------
@@ -101,18 +107,18 @@ inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
     .bool => bool,
 } {
     return switch (typ) {
-        .i64  => arg.i64,
-        .f64  => arg.f64,
-        .bool => arg.bool,
+        .i64  => arg.val.i64,
+        .f64  => arg.val.f64,
+        .bool => arg.val.bool,
     };
 }
 
 /// Pack a Zig return value into a RawRet.
 inline fn pack(comptime typ: ArgType, value: anytype) RawRet {
     return switch (typ) {
-        .i64  => .{ .i64  = value },
-        .f64  => .{ .f64  = value },
-        .bool => .{ .bool = value },
+        .i64  => .{ .tag = .i64,  .val = .{ .i64  = value } },
+        .f64  => .{ .tag = .f64,  .val = .{ .f64  = value } },
+        .bool => .{ .tag = .bool, .val = .{ .bool = value } },
     };
 }
 
@@ -132,9 +138,9 @@ test "trampoline: integer add" {
         .ret = .i64,
     });
 
-    const args = [_]RawArg{ .{ .i64 = 3 }, .{ .i64 = 4 } };
+    const args = [_]RawArg{ .{ .tag = .i64, .val = .{ .i64 = 3 } }, .{ .tag = .i64, .val = .{ .i64 = 4 } } };
     const ret = T.call(&args);
-    try std.testing.expectEqual(RawRet{ .i64 = 7 }, ret);
+    try std.testing.expectEqual(@as(i64, 7), ret.val.i64);
 }
 
 test "trampoline: float multiply" {
@@ -146,7 +152,7 @@ test "trampoline: float multiply" {
         .ret = .f64,
     });
 
-    const args = [_]RawArg{ .{ .f64 = 2.5 }, .{ .f64 = 4.0 } };
+    const args = [_]RawArg{ .{ .tag = .f64, .val = .{ .f64 = 2.5 } }, .{ .tag = .f64, .val = .{ .f64 = 4.0 } } };
     const ret = T.call(&args);
-    try std.testing.expectEqual(RawRet{ .f64 = 10.0 }, ret);
+    try std.testing.expectEqual(@as(f64, 10.0), ret.val.f64);
 }
