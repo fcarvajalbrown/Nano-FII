@@ -1,4 +1,4 @@
-//! build.zig — Nano-FFI build script.
+//! build.zig — Nano-FFI build script. Requires Zig 0.15.x.
 
 const std = @import("std");
 
@@ -6,11 +6,16 @@ pub fn build(b: *std.Build) void {
     const target   = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib = b.addSharedLibrary(.{
-        .name             = "nano_ffi",
+    const mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target           = target,
         .optimize         = optimize,
+    });
+
+    const lib = b.addLibrary(.{
+        .name        = "nano_ffi",
+        .root_module = mod,
+        .linkage     = .dynamic,
     });
 
     // Python headers
@@ -28,17 +33,11 @@ pub fn build(b: *std.Build) void {
         const py_libname = b.option([]const u8, "python-libname", "Python lib name") orelse "python312";
         lib.linkSystemLibrary(py_libname);
     } else if (os == .macos) {
-        // macOS: link python3 framework and allow undefined symbols (resolved
-        // at runtime by the Python interpreter via dlopen).
-        if (py_lib) |lp| if (lp.len > 0) lib.addLibraryPath(.{ .cwd_relative = lp });
-        lib.linkSystemLibrary("python3");
-        lib.linker_allow_shlib_undefined = true;
-    } else {
-        // Linux: Python symbols are resolved at runtime — do not link libpython.
-        lib.linker_allow_shlib_undefined = true;
+        // Python symbols resolved at runtime by the interpreter — no explicit link needed.
     }
 
-    // Windows: install as .pyd
+    lib.linker_allow_shlib_undefined = true;
+
     if (os == .windows) {
         const install_pyd = b.addInstallFileWithDir(
             lib.getEmittedBin(),
@@ -52,9 +51,11 @@ pub fn build(b: *std.Build) void {
     }
 
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target           = target,
-        .optimize         = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target           = target,
+            .optimize         = optimize,
+        }),
     });
     const run_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run all Zig unit tests");

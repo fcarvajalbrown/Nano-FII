@@ -1,19 +1,18 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "nano-ffi"
-version = "0.1.0"
+version = "0.2.0"
 description = "Minimalist high-speed Python-to-Zig FFI bridge via comptime trampolines."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 keywords = ["ffi", "zig", "performance", "native", "extension"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Other",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries",
 ]
@@ -23,11 +22,7 @@ Homepage = "https://github.com/fcarvajalbrown/Nano-FII"
 Issues   = "https://github.com/fcarvajalbrown/Nano-FII/issues"
 
 [tool.setuptools]
-# No pure-Python packages — the extension is a pre-built .pyd/.so
-# dropped into the wheel by the CI workflow.
 packages = []
 
 [tool.setuptools.data-files]
-# Wheels include the compiled extension directly.
-# CI copies nano_ffi.pyd / nano_ffi.so here before building the wheel.
 "." = ["nano_ffi*.pyd", "nano_ffi*.so"]

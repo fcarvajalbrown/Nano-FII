@@ -22,19 +22,19 @@ pub const ArgType = enum(u8) {
 /// Descriptor for a single function argument.
 pub const ArgDesc = struct {
     name: []const u8,
-    typ:  ArgType,
+    typ: ArgType,
 };
 
 /// Full signature descriptor passed to `makeTrampoline`.
 pub const Signature = struct {
-    args:   []const ArgDesc,
-    ret:    ArgType,
+    args: []const ArgDesc,
+    ret: ArgType,
 };
 
 /// Comptime trampoline factory.
 ///
 /// Given a comptime-known `func` and its `sig`, returns a new function whose
-/// signature is `fn (args: [*]const RawArg) callconv(.C) RawRet`.
+/// signature is `fn (args: [*]const RawArg) callconv(.c) RawRet`.
 /// Python calls this instead of `func` directly.
 ///
 /// Example:
@@ -43,7 +43,7 @@ pub const Signature = struct {
 ///       .ret  = .i64,
 ///   });
 pub fn makeTrampoline(
-    comptime func:      anytype,
+    comptime func: anytype,
     comptime sig_param: Signature,
 ) type {
     return struct {
@@ -53,7 +53,7 @@ pub fn makeTrampoline(
 
         /// The generated wrapper — this is what gets registered in the registry
         /// and called from python_ext.zig.
-        pub fn call(args: [*]const RawArg) callconv(.C) RawRet {
+        pub fn call(args: [*]const RawArg) callconv(.c) RawRet {
             // Unpack each argument at comptime-known offsets — no runtime loop.
             const result = comptime_call: {
                 var typed_args: std.meta.ArgsTuple(@TypeOf(func)) = undefined;
@@ -79,8 +79,8 @@ pub fn makeTrampoline(
 // an explicit tag + a C-compatible union instead.
 
 pub const RawValue = extern union {
-    i64:  i64,
-    f64:  f64,
+    i64: i64,
+    f64: f64,
     bool: bool,
 };
 
@@ -102,13 +102,13 @@ pub const RawRet = extern struct {
 
 /// Unpack a RawArg into the concrete Zig type expected by the function.
 inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
-    .i64  => i64,
-    .f64  => f64,
+    .i64 => i64,
+    .f64 => f64,
     .bool => bool,
 } {
     return switch (typ) {
-        .i64  => arg.val.i64,
-        .f64  => arg.val.f64,
+        .i64 => arg.val.i64,
+        .f64 => arg.val.f64,
         .bool => arg.val.bool,
     };
 }
@@ -116,8 +116,8 @@ inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
 /// Pack a Zig return value into a RawRet.
 inline fn pack(comptime typ: ArgType, value: anytype) RawRet {
     return switch (typ) {
-        .i64  => .{ .tag = .i64,  .val = .{ .i64  = value } },
-        .f64  => .{ .tag = .f64,  .val = .{ .f64  = value } },
+        .i64 => .{ .tag = .i64, .val = .{ .i64 = value } },
+        .f64 => .{ .tag = .f64, .val = .{ .f64 = value } },
         .bool => .{ .tag = .bool, .val = .{ .bool = value } },
     };
 }
@@ -126,8 +126,12 @@ inline fn pack(comptime typ: ArgType, value: anytype) RawRet {
 // Tests
 // ---------------------------------------------------------------------------
 
-fn addInts(a: i64, b: i64) i64 { return a + b; }
-fn mulFloats(a: f64, b: f64) f64 { return a * b; }
+fn addInts(a: i64, b: i64) i64 {
+    return a + b;
+}
+fn mulFloats(a: f64, b: f64) f64 {
+    return a * b;
+}
 
 test "trampoline: integer add" {
     const T = makeTrampoline(addInts, .{

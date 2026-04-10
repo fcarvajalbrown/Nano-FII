@@ -1,11 +1,9 @@
 .{
-    .name = "nano-ffi",
+    .name = .nano_ffi,
     .version = "0.1.0",
-    .minimum_zig_version = "0.13.0",
-
-    // No external Zig dependencies — zero-dependency is a P0 requirement.
+    .fingerprint = 0x7ce319bc8c92ee13,
+    .minimum_zig_version = "0.15.0",
     .dependencies = .{},
-
     .paths = .{
         "build.zig",
         "build.zig.zon",

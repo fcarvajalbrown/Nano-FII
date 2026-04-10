@@ -3,12 +3,12 @@
 //! Stores name → (FnPtr, Signature) so the dispatcher in python_ext.zig
 //! knows how to unpack Python arguments before calling the trampoline.
 
-const std       = @import("std");
-const bridge    = @import("comptime_bridge.zig");
+const std = @import("std");
+const bridge = @import("comptime_bridge.zig");
 const Allocator = std.mem.Allocator;
 
 /// A raw function pointer with C calling convention.
-pub const FnPtr = *const fn () callconv(.C) void;
+pub const FnPtr = *const fn () callconv(.c) void;
 
 /// A registry entry: function pointer + its type signature.
 pub const Entry = struct {
@@ -18,12 +18,12 @@ pub const Entry = struct {
 
 /// The registry. Create one per module with `Registry.init(allocator)`.
 pub const Registry = struct {
-    map:       std.StringHashMap(Entry),
+    map: std.StringHashMap(Entry),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator) Registry {
         return .{
-            .map       = std.StringHashMap(Entry).init(allocator),
+            .map = std.StringHashMap(Entry).init(allocator),
             .allocator = allocator,
         };
     }
@@ -58,7 +58,7 @@ test "register and lookup with signature" {
     const dummy: FnPtr = @ptrCast(&dummyFn);
     const sig = bridge.Signature{
         .args = &.{ .{ .name = "a", .typ = .i64 }, .{ .name = "b", .typ = .i64 } },
-        .ret  = .i64,
+        .ret = .i64,
     };
 
     try reg.register("add", dummy, sig);
@@ -87,4 +87,4 @@ test "count reflects registrations" {
     try std.testing.expectEqual(@as(usize, 2), reg.count());
 }
 
-fn dummyFn() callconv(.C) void {}
+fn dummyFn() callconv(.c) void {}
