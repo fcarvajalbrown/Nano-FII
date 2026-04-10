@@ -21,20 +21,21 @@ result = nano_ffi.call("mul", 2.5, 4.0)  # → 10.0
 
 ## Benchmark
 
-| Library       | Avg call overhead | vs Nano-FFI |
-|---------------|-------------------|-------------|
-| ctypes        | ~340 ns           | 4.28x slower |
-| **Nano-FFI**  | **79.6 ns**       | **baseline** |
+| Platform | Library | Avg call overhead | vs Nano-FFI |
+|----------|---------|-------------------|-------------|
+| Windows x64 | ctypes | ~417 ns | 3.82x slower |
+| Windows x64 | **Nano-FFI** | **109.4 ns** | **baseline** |
+| macOS ARM64 | ctypes | ~152 ns | 3.89x slower |
+| macOS ARM64 | **Nano-FFI** | **39.2 ns** | **baseline** |
 
-> Measured on x86_64 Windows, `ReleaseFast` build, 100k iterations.
-> Run `python tests/test_python.py` to reproduce on your machine.
+> `ReleaseFast` build, 100k iterations. Run `python tests/test_python.py` to reproduce.
 
 ---
 
 ## Requirements
 
 - Python >= 3.10
-- Zig 0.13.0 (pinned — do not use nightly)
+- Zig 0.15.2
 - A C compiler (for linking against `libpython`)
 
 ---
@@ -47,23 +48,27 @@ result = nano_ffi.call("mul", 2.5, 4.0)  # → 10.0
 pip install nano-ffi
 ```
 
-No Zig required — wheels are pre-compiled for Linux, macOS, and Windows.
+No Zig required — wheels are pre-compiled for Windows and macOS.
 
 ### From source
 
 ```bash
 git clone https://github.com/fcarvajalbrown/Nano-FII.git
 cd Nano-FII
-pip install scikit-build-core
-pip install -e .
 ```
 
-Or build manually:
+**Windows:**
+```powershell
+zig build -Doptimize=ReleaseFast `
+  -Dpython-include="<path\to\python\include>" `
+  -Dpython-lib="<path\to\python\libs>" `
+  -Dpython-libname=python314
+```
 
+**macOS / Linux:**
 ```bash
 zig build -Doptimize=ReleaseFast \
-  -Dpython-include=<path/to/python/include> \
-  -Dpython-lib=<path/to/python/libs>
+  -Dpython-include="$(python3 -c "import sysconfig; print(sysconfig.get_path('include'))")"
 ```
 
 The compiled library lands in `zig-out/lib/`.
@@ -84,7 +89,7 @@ result = nano_ffi.call("add", 3, 4)        # → 7
 result = nano_ffi.call("mul", 2.5, 4.0)   # → 10.0
 
 # Check library version
-print(nano_ffi.version())                  # → "0.1.0"
+print(nano_ffi.version())                  # → "0.2.0"
 ```
 
 ### Registering your own Zig function
@@ -134,35 +139,17 @@ src/
 # Zig unit tests
 zig build test
 
-# Python end-to-end + benchmark (debug)
-zig build
-python tests/test_python.py
-
-# Benchmark (production numbers)
-zig build -Doptimize=ReleaseFast \
-  -Dpython-include=<path> \
-  -Dpython-lib=<path>
-python tests/test_python.py
-```
-
----
-
-## Cross-compilation (wheels)
-
-From a single Linux machine:
-
-```bash
-zig build -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu
-zig build -Doptimize=ReleaseFast -Dtarget=aarch64-apple-macos
-zig build -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu
+# Python end-to-end + benchmark
+PYTHONPATH=. python tests/test_python.py
 ```
 
 ---
 
 ## Current limitations
 
-- Supported argument types: `i64`, `f64`, `bool` — slices and strings planned for v0.2.0
+- Supported argument types: `i64`, `f64`, `bool` — slices and strings planned for v0.3.0
 - Max 8 arguments per function call
+- Linux wheels not yet available (coming in v0.3.0)
 
 ---
 
