@@ -69,6 +69,12 @@ fn zigBufMax(buf: []const u8) u8 {
     }
     return m;
 }
+fn zigSum8(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, g: i64, h: i64) i64 {
+    return a + b + c + d + e + f + g + h;
+}
+fn zigScaleF32(x: f32) f32 {
+    return x * 2.0;
+}
 
 const AddTrampoline = bridge.makeTrampoline(zigAdd, .{
     .args = &.{
@@ -149,6 +155,21 @@ const FillTrampoline = bridge.makeTrampoline(zigFill, .{
 const BufMaxTrampoline = bridge.makeTrampoline(zigBufMax, .{
     .args = &.{.{ .name = "buf", .typ = .buffer }},
     .ret = .u8,
+});
+
+const Sum8Trampoline = bridge.makeTrampoline(zigSum8, .{
+    .args = &.{
+        .{ .name = "a", .typ = .i64 }, .{ .name = "b", .typ = .i64 },
+        .{ .name = "c", .typ = .i64 }, .{ .name = "d", .typ = .i64 },
+        .{ .name = "e", .typ = .i64 }, .{ .name = "f", .typ = .i64 },
+        .{ .name = "g", .typ = .i64 }, .{ .name = "h", .typ = .i64 },
+    },
+    .ret = .i64,
+});
+
+const ScaleF32Trampoline = bridge.makeTrampoline(zigScaleF32, .{
+    .args = &.{.{ .name = "x", .typ = .f32 }},
+    .ret = .f32,
 });
 
 // ---------------------------------------------------------------------------
@@ -534,6 +555,8 @@ pub fn init() ?*py.PyObject {
     global_registry.register("signmag", SignMagTrampoline.asPtr(), SignMagTrampoline.sig) catch return null;
     global_registry.register("fill", FillTrampoline.asPtr(), FillTrampoline.sig) catch return null;
     global_registry.register("bufmax", BufMaxTrampoline.asPtr(), BufMaxTrampoline.sig) catch return null;
+    global_registry.register("sum8", Sum8Trampoline.asPtr(), Sum8Trampoline.sig) catch return null;
+    global_registry.register("scalef32", ScaleF32Trampoline.asPtr(), ScaleF32Trampoline.sig) catch return null;
 
     return py.PyModule_Create(&module_def);
 }

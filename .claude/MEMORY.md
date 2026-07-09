@@ -4,9 +4,13 @@
 A minimalist Python-to-Zig FFI bridge using comptime trampolines. Python calls Zig functions via a string-keyed registry. All type dispatch is resolved at compile time — no runtime branching in the hot path.
 
 ## Current state
-- Version: 0.2.0
-- Zig: 0.15.2 (pinned)
-- Status: Windows x64 + macOS ARM64 confirmed working, Linux pending
+- Version: 1.0.0 (API frozen, semver from here)
+- Zig: 0.15.2 (pinned; local toolchain at %LOCALAPPDATA%\zig-0.15.2\zig.exe)
+- Status: Windows x64 confirmed working; Linux buildable from source; macOS via CI
+- Build locally with `.\build_local.ps1` (auto-detects Python include/libs/tag)
+- Types: i64, i32, u64, u32, u8, f64, f32, bool, str, bytes, buffer (zero-copy)
+- API: call, version, list_functions, signature; errors -> KeyError/TypeError/ValueError/BufferError/RuntimeError
+- 42 Python tests + Zig unit tests (test_root.zig excludes python_ext); `zig build test`
 
 ## Benchmarks (ReleaseFast)
 - Windows x64: 109.4ns, 3.82x faster than ctypes
@@ -62,9 +66,7 @@ python tests/test_python.py                # Windows (with nano_ffi.pyd in root)
 - v0.1.0: Windows x64 only
 - v0.2.0: Windows x64 + macOS ARM64
 
-## Pending (v0.3.0)
-- Linux wheel
-- Slice/string argument types
-- Version string bug: returns "0.1" instead of "0.1.0" — fix in `py_version`
-- GitHub Actions CI (blocked on cross-platform Zig build issues)
-- `TODO(day-3)` label cleanup now that dispatch is wired
+## Post-1.0 backlog
+- Publish pre-built Linux/macOS wheels from CI (workflow at .github/workflows/ci.yml)
+- Zig-returned heap slices (owned buffers) — currently returns must be valid at return time
+- More than 8 args / rets if a real need appears (current fixed cap)

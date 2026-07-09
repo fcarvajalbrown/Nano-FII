@@ -31,7 +31,7 @@ except ImportError as e:
 # ---------------------------------------------------------------------------
 
 # Bump this in lockstep with src/version.zig on every release.
-EXPECTED_VERSION = "0.9.0"
+EXPECTED_VERSION = "1.0.0"
 
 
 class TestVersion(unittest.TestCase):
@@ -47,6 +47,14 @@ class TestCallDispatch(unittest.TestCase):
     def test_call_unknown_function_raises_key_error(self):
         with self.assertRaises(KeyError):
             nano_ffi.call("nonexistent", 1, 2)
+
+    def test_call_no_name_raises(self):
+        with self.assertRaises(TypeError):
+            nano_ffi.call()
+
+    def test_call_wrong_arg_count_raises(self):
+        with self.assertRaises(TypeError):
+            nano_ffi.call("add", 1)
 
     def test_call_add_integers(self):
         result = nano_ffi.call("add", 3, 4)
@@ -199,6 +207,35 @@ class TestZeroCopyBuffers(unittest.TestCase):
         # bytes is immutable; PyBUF_WRITABLE must fail.
         with self.assertRaises((BufferError, TypeError)):
             nano_ffi.call("fill", b"abcd", 0)
+
+
+class TestEdgeCases(unittest.TestCase):
+    """v1.0.0: boundary and limit coverage before the API freeze."""
+
+    def test_eight_arguments(self):
+        self.assertEqual(nano_ffi.call("sum8", 1, 2, 3, 4, 5, 6, 7, 8), 36)
+
+    def test_f32_round_trip(self):
+        self.assertAlmostEqual(nano_ffi.call("scalef32", 1.5), 3.0, places=5)
+
+    def test_u8_upper_boundary_ok(self):
+        buf = bytearray(1)
+        nano_ffi.call("fill", buf, 255)
+        self.assertEqual(buf, bytearray(b"\xff"))
+
+    def test_u8_overflow_raises(self):
+        with self.assertRaises(ValueError):
+            nano_ffi.call("fill", bytearray(1), 256)
+
+    def test_u64_max(self):
+        umax = 2**64 - 1
+        self.assertEqual(nano_ffi.call("umul", umax, 1), umax)
+
+    def test_empty_string(self):
+        self.assertEqual(nano_ffi.call("strlen", ""), 0)
+
+    def test_empty_bytes(self):
+        self.assertEqual(nano_ffi.call("bytesum", b""), 0)
 
 
 # ---------------------------------------------------------------------------

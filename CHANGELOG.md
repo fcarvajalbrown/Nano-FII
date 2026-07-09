@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.0] — 2026-07-09
+
+First stable release. The public API — `call`, `version`, `list_functions`,
+`signature` — is frozen and follows semantic versioning from here on.
+
+### Added
+- Comprehensive edge-case coverage: 8-argument calls, f32 round-trip, u8/u64
+  boundaries, empty str/bytes, wrong-arg-count and missing-name errors
+- Built-in examples `sum8` (max-arity) and `scalef32` (f32)
+- Stability guarantee documented in the README
+
+### Guarantees
+- Supported types are stable: `i64`, `i32`, `u64`, `u32`, `u8`, `f64`, `f32`,
+  `bool`, `str`, `bytes`, `buffer`
+- Up to 8 arguments and 8 return values per call
+- Errors map consistently: `KeyError` (unknown fn), `TypeError` (arity/kind),
+  `ValueError` (range), `BufferError` (non-writable buffer), `RuntimeError`
+  (Zig error, message = `@errorName`)
+
 ## [0.9.0] — 2026-07-09
 
 ### Added

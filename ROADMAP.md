@@ -107,11 +107,11 @@ Freeze the surface and stand behind it.
 | Milestone | State |
 |---|---|
 | 0.2.0 | Released |
-| 0.3.0 | Planned |
-| 0.4.0 | Planned |
-| 0.5.0 | Planned |
-| 0.6.0 | Planned |
-| 0.7.0 | Planned |
-| 0.8.0 | Planned |
-| 0.9.0 | Planned |
-| 1.0.0 | Planned |
+| 0.3.0 | Released |
+| 0.4.0 | Released |
+| 0.5.0 | Released |
+| 0.6.0 | Released |
+| 0.7.0 | Released |
+| 0.8.0 | Released |
+| 0.9.0 | Released |
+| 1.0.0 | Released — API frozen |
