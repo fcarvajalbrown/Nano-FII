@@ -24,10 +24,42 @@ page size, fonts, margins, and reference style change per journal.
 To add a journal, add a profile to `JOURNALS` in `build_docx.py` (folder, font,
 size, page, margin). The body and numbers are shared; only front matter changes.
 
+## >>> NEXT SESSION CHECKPOINT (read first) <<<
+
+**The paper is being submitted to JOT first, one venue at a time.** JOT is the
+only manuscript built so far (`JOT/Carvajal_JOT_NanoFFI.pdf`, from the official
+`jot.cls`). CLEIej and J.UCS official templates are staged in their folders but
+their manuscripts are **not built yet**, on purpose.
+
+**At the start of the next session, ASK Felipe whether JOT accepted or rejected
+the paper before doing anything else with CLEIej or J.UCS.**
+- If JOT **rejected**: build the CLEIej manuscript next (official `cleiej.cls`
+  staged in `CLEIej/`; `build_latex`-style script, mirror `build_jot.py`), then
+  J.UCS if CLEIej also declines.
+- If JOT **accepted**: stop — exclusivity means the paper is placed; do not
+  submit elsewhere.
+Do not build CLEIej/J.UCS speculatively before that answer.
+
 ## Target journals (decided 2026-07-09)
 
 Hard rule from the author: **not JOSS** (Journal of Open Source Software) — it is
-excluded as a venue. A Chilean venue is preferred. All five below are non-JOSS.
+excluded as a venue. A Chilean venue is preferred. The modest-profile set below
+(peers of *Applications of Modelling and Simulation*) was chosen because
+Ingeniare is occupied with another of Felipe's papers. All are non-JOSS.
+
+**Active order:** JOT (built, ready to submit) -> CLEIej -> J.UCS.
+
+| Journal | Country / publisher | Official template | Built? |
+|---|---|---|---|
+| Journal of Object Technology (JOT) | AITO, jot.fm | `jot.cls` (LaTeX only; Word NOT accepted) | Yes -> `JOT/Carvajal_JOT_NanoFFI.pdf` |
+| CLEI Electronic Journal (CLEIej) | CLEI, Latin America | `cleiej.cls` + IEEEtran.bst (LaTeX; also OO/Word) | Staged, not built |
+| Journal of Universal Computer Science (J.UCS) | ARPHA / TU Graz | `JUCSWordTemplateV5.docx` + `jucs2e.sty` (needs XeLaTeX) | Staged, not built |
+
+The five earlier profiles in `build_docx.py` (Ingeniare, PeerJ CS, SoftwareX,
+Software Impacts, SciCoP) used generic, non-official formatting and are kept only
+as reading drafts; the official-template path (JOT/CLEIej/J.UCS) supersedes them.
+
+### Original 5-venue notes (superseded, kept for reference)
 
 | Journal | Country / publisher | Fit | Folder |
 |---|---|---|---|
@@ -53,11 +85,11 @@ changes.
 
 | Journal | Status (2026-07-09) |
 |---|---|
-| Ingeniare | Staged in repo, not submitted. |
-| PeerJ CS | Staged in repo, not submitted. |
-| SoftwareX | Staged in repo, not submitted. |
-| Software Impacts | Staged in repo, not submitted. |
-| SciCoP | Staged in repo, not submitted. |
+| JOT | Built (official jot.cls), ready to submit. NOT yet submitted. |
+| CLEIej | Official template staged; manuscript not built (pending JOT outcome). |
+| J.UCS | Official template staged; manuscript not built (pending JOT outcome). |
+| Ingeniare | Occupied by another paper of Felipe's; not in play now. |
+| PeerJ CS / SoftwareX / Software Impacts / SciCoP | Superseded reading drafts only. |
 
 ## AI-disclosure obligation (resolve before submission)
 
