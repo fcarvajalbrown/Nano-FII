@@ -31,7 +31,7 @@ except ImportError as e:
 # ---------------------------------------------------------------------------
 
 # Bump this in lockstep with src/version.zig on every release.
-EXPECTED_VERSION = "0.3.0"
+EXPECTED_VERSION = "0.4.0"
 
 
 class TestVersion(unittest.TestCase):
@@ -75,6 +75,34 @@ class TestScalarTypes(unittest.TestCase):
     def test_u64_negative_raises(self):
         with self.assertRaises((ValueError, OverflowError)):
             nano_ffi.call("umul", -1, 2)
+
+
+class TestStringsAndBytes(unittest.TestCase):
+    """v0.4.0: str/bytes marshalling across the C-ABI boundary."""
+
+    def test_strlen_ascii(self):
+        self.assertEqual(nano_ffi.call("strlen", "hello"), 5)
+
+    def test_strlen_utf8_counts_bytes(self):
+        # "ñ" is 2 UTF-8 bytes; strlen reports byte length, not codepoints.
+        self.assertEqual(nano_ffi.call("strlen", "ñ"), 2)
+
+    def test_echo_round_trip(self):
+        self.assertEqual(nano_ffi.call("echo", "round-trip"), "round-trip")
+
+    def test_echo_utf8_preserved(self):
+        s = "áéí — Ñuñoa"
+        self.assertEqual(nano_ffi.call("echo", s), s)
+
+    def test_echo_empty(self):
+        self.assertEqual(nano_ffi.call("echo", ""), "")
+
+    def test_bytesum(self):
+        self.assertEqual(nano_ffi.call("bytesum", b"\x01\x02\x03"), 6)
+
+    def test_str_arg_wrong_type_raises(self):
+        with self.assertRaises((TypeError, ValueError)):
+            nano_ffi.call("strlen", 123)
 
 
 # ---------------------------------------------------------------------------

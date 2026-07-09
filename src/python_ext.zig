@@ -37,6 +37,17 @@ fn zigAdd32(a: i32, b: i32) i32 {
 fn zigUMul(a: u64, b: u64) u64 {
     return a * b;
 }
+fn zigStrLen(s: []const u8) i64 {
+    return @intCast(s.len);
+}
+fn zigEcho(s: []const u8) []const u8 {
+    return s;
+}
+fn zigByteSum(b: []const u8) u64 {
+    var sum: u64 = 0;
+    for (b) |x| sum += x;
+    return sum;
+}
 
 const AddTrampoline = bridge.makeTrampoline(zigAdd, .{
     .args = &.{
@@ -67,6 +78,21 @@ const UMulTrampoline = bridge.makeTrampoline(zigUMul, .{
         .{ .name = "a", .typ = .u64 },
         .{ .name = "b", .typ = .u64 },
     },
+    .ret = .u64,
+});
+
+const StrLenTrampoline = bridge.makeTrampoline(zigStrLen, .{
+    .args = &.{.{ .name = "s", .typ = .str }},
+    .ret = .i64,
+});
+
+const EchoTrampoline = bridge.makeTrampoline(zigEcho, .{
+    .args = &.{.{ .name = "s", .typ = .str }},
+    .ret = .str,
+});
+
+const ByteSumTrampoline = bridge.makeTrampoline(zigByteSum, .{
+    .args = &.{.{ .name = "b", .typ = .bytes }},
     .ret = .u64,
 });
 
@@ -114,7 +140,27 @@ fn pyToRawArg(obj: *py.PyObject, typ: bridge.ArgType) !bridge.RawArg {
         .f64 => .{ .tag = .f64, .val = .{ .f64 = py.PyFloat_AsDouble(obj) } },
         .f32 => .{ .tag = .f32, .val = .{ .f32 = @floatCast(py.PyFloat_AsDouble(obj)) } },
         .bool => .{ .tag = .bool, .val = .{ .bool = py.PyObject_IsTrue(obj) == 1 } },
+        .str => try strToRawArg(obj),
+        .bytes => try bytesToRawArg(obj),
     };
+}
+
+// Python str -> borrowed UTF-8 view. The pointer is owned by the PyUnicode
+// object and stays valid for the duration of the call; the marshaller copies
+// it into a fresh Python object before returning, so nothing dangles.
+fn strToRawArg(obj: *py.PyObject) !bridge.RawArg {
+    var size: py.Py_ssize_t = 0;
+    const p = py.PyUnicode_AsUTF8AndSize(obj, &size);
+    if (p == null) return error.ConversionFailed; // PyUnicode_* set a TypeError
+    return .{ .tag = .str, .val = .{ .slice = .{ .ptr = @ptrCast(p), .len = @intCast(size) } } };
+}
+
+// Python bytes -> borrowed view over the object's buffer.
+fn bytesToRawArg(obj: *py.PyObject) !bridge.RawArg {
+    var buf: [*c]u8 = undefined;
+    var size: py.Py_ssize_t = 0;
+    if (py.PyBytes_AsStringAndSize(obj, &buf, &size) != 0) return error.ConversionFailed;
+    return .{ .tag = .bytes, .val = .{ .slice = .{ .ptr = @ptrCast(buf), .len = @intCast(size) } } };
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +177,9 @@ fn rawRetToPy(ret: bridge.RawRet) ?*py.PyObject {
         .f64 => py.PyFloat_FromDouble(ret.val.f64),
         .f32 => py.PyFloat_FromDouble(@floatCast(ret.val.f32)),
         .bool => py.PyBool_FromLong(if (ret.val.bool) 1 else 0),
+        // Both copy the bytes into a new, Python-owned object.
+        .str => py.PyUnicode_FromStringAndSize(@ptrCast(ret.val.slice.ptr), @intCast(ret.val.slice.len)),
+        .bytes => py.PyBytes_FromStringAndSize(@ptrCast(ret.val.slice.ptr), @intCast(ret.val.slice.len)),
     };
 }
 
@@ -254,6 +303,9 @@ pub fn init() ?*py.PyObject {
     global_registry.register("mul", MulTrampoline.asPtr(), MulTrampoline.sig) catch return null;
     global_registry.register("add32", Add32Trampoline.asPtr(), Add32Trampoline.sig) catch return null;
     global_registry.register("umul", UMulTrampoline.asPtr(), UMulTrampoline.sig) catch return null;
+    global_registry.register("strlen", StrLenTrampoline.asPtr(), StrLenTrampoline.sig) catch return null;
+    global_registry.register("echo", EchoTrampoline.asPtr(), EchoTrampoline.sig) catch return null;
+    global_registry.register("bytesum", ByteSumTrampoline.asPtr(), ByteSumTrampoline.sig) catch return null;
 
     return py.PyModule_Create(&module_def);
 }

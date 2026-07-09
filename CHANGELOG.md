@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0] — 2026-07-09
+
+### Added
+- `str` and `bytes` argument/return kinds — variable-length data across the boundary
+- `RawSlice` (`ptr` + `len`), a C-ABI-safe view carried inside `RawValue`
+- Python `str` <-> Zig `[]const u8` via borrowed UTF-8 view; Python `bytes` <-> `[]const u8`
+- Return marshalling copies the slice into a fresh Python object, so no Zig memory dangles
+- Built-in examples `strlen` (str -> i64), `echo` (str -> str), `bytesum` (bytes -> u64)
+
+### Notes
+- Ownership contract: a Zig-returned slice must be valid at the moment of return (static data, or a view into the input arguments). Returning heap-allocated slices is deferred to the v0.8.0 buffer work.
+
 ## [0.3.0] — 2026-07-09
 
 ### Added

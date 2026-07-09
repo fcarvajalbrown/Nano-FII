@@ -88,8 +88,14 @@ result = nano_ffi.call("add", 3, 4)        # → 7
 # Float multiplication (built-in example)
 result = nano_ffi.call("mul", 2.5, 4.0)   # → 10.0
 
+# String in, length out
+print(nano_ffi.call("strlen", "hello"))    # → 5
+
+# String round-trip (UTF-8 preserved)
+print(nano_ffi.call("echo", "Ñuñoa"))      # → "Ñuñoa"
+
 # Check library version
-print(nano_ffi.version())                  # → "0.3.0"
+print(nano_ffi.version())                  # → "0.4.0"
 ```
 
 ### Registering your own Zig function
@@ -147,7 +153,7 @@ PYTHONPATH=. python tests/test_python.py
 
 ## Current limitations
 
-- Supported argument types: `i64`, `i32`, `u64`, `u32`, `u8`, `f64`, `f32`, `bool` — strings and slices planned for v0.4.0
+- Supported argument types: `i64`, `i32`, `u64`, `u32`, `u8`, `f64`, `f32`, `bool`, `str`, `bytes`
 - Max 8 arguments per function call
 - Linux wheels not yet available (coming in v0.9.0)
 

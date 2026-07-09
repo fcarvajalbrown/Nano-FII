@@ -21,7 +21,11 @@ pub const ArgType = enum(u8) {
     u64,
     f32,
     u8,
-    // Pointer types (e.g. slices) are handled separately — see SliceArg.
+    // Variable-length byte views. Both marshal to a Zig `[]const u8`; they
+    // differ only in how Python packs/unpacks them (str = UTF-8 text,
+    // bytes = raw). See RawSlice for the C-ABI-safe representation.
+    str,
+    bytes,
 };
 
 /// Descriptor for a single function argument.
@@ -83,6 +87,14 @@ pub fn makeTrampoline(
 // Tagged unions cannot cross the C ABI boundary. We use an extern struct with
 // an explicit tag + a C-compatible union instead.
 
+/// A C-ABI-safe view of borrowed bytes (ptr + len). Zig's native slice is a
+/// fat pointer with no guaranteed layout across `extern`, so we carry the two
+/// fields explicitly and rebuild the slice on the Zig side.
+pub const RawSlice = extern struct {
+    ptr: [*]const u8,
+    len: usize,
+};
+
 pub const RawValue = extern union {
     i64: i64,
     f64: f64,
@@ -92,6 +104,7 @@ pub const RawValue = extern union {
     u64: u64,
     f32: f32,
     u8: u8,
+    slice: RawSlice,
 };
 
 /// A raw argument passed from Python.
@@ -120,6 +133,7 @@ inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
     .u64 => u64,
     .f32 => f32,
     .u8 => u8,
+    .str, .bytes => []const u8,
 } {
     return switch (typ) {
         .i64 => arg.val.i64,
@@ -130,6 +144,7 @@ inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
         .u64 => arg.val.u64,
         .f32 => arg.val.f32,
         .u8 => arg.val.u8,
+        .str, .bytes => arg.val.slice.ptr[0..arg.val.slice.len],
     };
 }
 
@@ -144,6 +159,8 @@ inline fn pack(comptime typ: ArgType, value: anytype) RawRet {
         .u64 => .{ .tag = .u64, .val = .{ .u64 = value } },
         .f32 => .{ .tag = .f32, .val = .{ .f32 = value } },
         .u8 => .{ .tag = .u8, .val = .{ .u8 = value } },
+        .str => .{ .tag = .str, .val = .{ .slice = .{ .ptr = value.ptr, .len = value.len } } },
+        .bytes => .{ .tag = .bytes, .val = .{ .slice = .{ .ptr = value.ptr, .len = value.len } } },
     };
 }
 
@@ -188,6 +205,36 @@ test "trampoline: i32 subtract" {
     const args = [_]RawArg{ .{ .tag = .i32, .val = .{ .i32 = 10 } }, .{ .tag = .i32, .val = .{ .i32 = 3 } } };
     const ret = T.call(&args);
     try std.testing.expectEqual(@as(i32, 7), ret.val.i32);
+}
+
+fn strLenZ(s: []const u8) i64 {
+    return @intCast(s.len);
+}
+fn echoZ(s: []const u8) []const u8 {
+    return s;
+}
+
+test "trampoline: string length" {
+    const T = makeTrampoline(strLenZ, .{
+        .args = &.{.{ .name = "s", .typ = .str }},
+        .ret = .i64,
+    });
+    const hello: []const u8 = "hello";
+    const args = [_]RawArg{.{ .tag = .str, .val = .{ .slice = .{ .ptr = hello.ptr, .len = hello.len } } }};
+    const ret = T.call(&args);
+    try std.testing.expectEqual(@as(i64, 5), ret.val.i64);
+}
+
+test "trampoline: string echo round-trips ptr/len" {
+    const T = makeTrampoline(echoZ, .{
+        .args = &.{.{ .name = "s", .typ = .str }},
+        .ret = .str,
+    });
+    const src: []const u8 = "world!";
+    const args = [_]RawArg{.{ .tag = .str, .val = .{ .slice = .{ .ptr = src.ptr, .len = src.len } } }};
+    const ret = T.call(&args);
+    try std.testing.expectEqual(src.len, ret.val.slice.len);
+    try std.testing.expectEqualStrings(src, ret.val.slice.ptr[0..ret.val.slice.len]);
 }
 
 test "trampoline: float multiply" {
