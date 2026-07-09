@@ -2,4 +2,4 @@
 //! Both root.zig (Zig-side `version`) and python_ext.zig (`nano_ffi.version()`)
 //! read from here so the number can never drift between them.
 
-pub const literal = "0.5.0";
+pub const literal = "0.6.0";

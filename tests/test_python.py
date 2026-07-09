@@ -31,7 +31,7 @@ except ImportError as e:
 # ---------------------------------------------------------------------------
 
 # Bump this in lockstep with src/version.zig on every release.
-EXPECTED_VERSION = "0.5.0"
+EXPECTED_VERSION = "0.6.0"
 
 
 class TestVersion(unittest.TestCase):
@@ -122,6 +122,35 @@ class TestErrorPropagation(unittest.TestCase):
             self.assertEqual(str(e), "DivisionByZero")
         else:
             self.fail("expected RuntimeError")
+
+
+class TestIntrospection(unittest.TestCase):
+    """v0.6.0: the module is self-describing."""
+
+    def test_list_functions_contains_builtins(self):
+        fns = nano_ffi.list_functions()
+        self.assertIsInstance(fns, list)
+        for name in ("add", "mul", "add32", "umul", "strlen", "echo", "bytesum", "div"):
+            self.assertIn(name, fns)
+
+    def test_signature_add(self):
+        sig = nano_ffi.signature("add")
+        self.assertEqual(sig["ret"], "i64")
+        self.assertEqual(sig["args"], [("a", "i64"), ("b", "i64")])
+
+    def test_signature_echo_is_str(self):
+        sig = nano_ffi.signature("echo")
+        self.assertEqual(sig["ret"], "str")
+        self.assertEqual(sig["args"], [("s", "str")])
+
+    def test_signature_bytesum_is_bytes_u64(self):
+        sig = nano_ffi.signature("bytesum")
+        self.assertEqual(sig["ret"], "u64")
+        self.assertEqual(sig["args"], [("b", "bytes")])
+
+    def test_signature_unknown_raises_key_error(self):
+        with self.assertRaises(KeyError):
+            nano_ffi.signature("does_not_exist")
 
 
 # ---------------------------------------------------------------------------

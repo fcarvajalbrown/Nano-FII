@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nano-ffi"
-version = "0.5.0"
+version = "0.6.0"
 description = "Minimalist high-speed Python-to-Zig FFI bridge via comptime trampolines."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,4 +25,4 @@ Issues   = "https://github.com/fcarvajalbrown/Nano-FII/issues"
 packages = []
 
 [tool.setuptools.data-files]
-"." = ["nano_ffi*.pyd", "nano_ffi*.so"]
+"." = ["nano_ffi*.pyd", "nano_ffi*.so", "nano_ffi.pyi", "py.typed"]

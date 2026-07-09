@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0] — 2026-07-09
+
+### Added
+- `nano_ffi.list_functions()` — names of every registered Zig function, read from the live registry
+- `nano_ffi.signature(name)` — `{"args": [(name, type), ...], "ret": type}` describing a function
+- PEP 561 type stubs (`nano_ffi.pyi`) and a `py.typed` marker, packaged in the wheel
+- Type names in `signature()` come straight from the `ArgType` tag (`i64`, `str`, `bytes`, ...)
+
 ## [0.5.0] — 2026-07-09
 
 ### Added

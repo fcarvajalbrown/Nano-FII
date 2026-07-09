@@ -280,6 +280,83 @@ fn py_version(self: ?*py.PyObject, _: ?*py.PyObject) callconv(.c) ?*py.PyObject 
 }
 
 // ---------------------------------------------------------------------------
+// nano_ffi.list_functions() — names of every registered function
+// ---------------------------------------------------------------------------
+
+fn py_list_functions(self: ?*py.PyObject, _: ?*py.PyObject) callconv(.c) ?*py.PyObject {
+    _ = self;
+    if (!registry_ready) {
+        _ = py.PyErr_SetString(py.PyExc_RuntimeError, "nano_ffi registry not initialised");
+        return null;
+    }
+    const list = py.PyList_New(0) orelse return null;
+    var it = global_registry.map.iterator();
+    while (it.next()) |e| {
+        const name = e.key_ptr.*;
+        const s = py.PyUnicode_FromStringAndSize(@ptrCast(name.ptr), @intCast(name.len)) orelse {
+            py.Py_DecRef(list);
+            return null;
+        };
+        const rc = py.PyList_Append(list, s);
+        py.Py_DecRef(s);
+        if (rc != 0) {
+            py.Py_DecRef(list);
+            return null;
+        }
+    }
+    return list;
+}
+
+// ---------------------------------------------------------------------------
+// nano_ffi.signature(name) -> {"args": [(name, type), ...], "ret": type}
+// ---------------------------------------------------------------------------
+
+fn py_signature(self: ?*py.PyObject, args: ?*py.PyObject) callconv(.c) ?*py.PyObject {
+    _ = self;
+    if (!registry_ready) {
+        _ = py.PyErr_SetString(py.PyExc_RuntimeError, "nano_ffi registry not initialised");
+        return null;
+    }
+
+    var name_cstr: [*c]const u8 = undefined;
+    if (py.PyArg_ParseTuple(args, "s", &name_cstr) == 0) return null;
+    const name = std.mem.span(name_cstr);
+
+    const entry = global_registry.lookup(name) orelse {
+        _ = py.PyErr_SetString(py.PyExc_KeyError, "nano_ffi: function not found");
+        return null;
+    };
+
+    const dict = py.PyDict_New() orelse return null;
+    const arg_list = py.PyList_New(0) orelse {
+        py.Py_DecRef(dict);
+        return null;
+    };
+
+    for (entry.sig.args) |desc| {
+        const nm = py.PyUnicode_FromStringAndSize(@ptrCast(desc.name.ptr), @intCast(desc.name.len));
+        const ty = py.PyUnicode_FromString(@tagName(desc.typ));
+        const pair = py.PyTuple_Pack(2, nm, ty);
+        if (nm) |x| py.Py_DecRef(x);
+        if (ty) |x| py.Py_DecRef(x);
+        if (pair) |p| {
+            _ = py.PyList_Append(arg_list, p);
+            py.Py_DecRef(p);
+        }
+    }
+
+    _ = py.PyDict_SetItemString(dict, "args", arg_list);
+    py.Py_DecRef(arg_list);
+
+    const ret_ty = py.PyUnicode_FromString(@tagName(entry.sig.ret));
+    if (ret_ty) |r| {
+        _ = py.PyDict_SetItemString(dict, "ret", r);
+        py.Py_DecRef(r);
+    }
+    return dict;
+}
+
+// ---------------------------------------------------------------------------
 // Method table
 // ---------------------------------------------------------------------------
 
@@ -295,6 +372,18 @@ var methods = [_]py.PyMethodDef{
         .ml_meth = py_version,
         .ml_flags = py.METH_NOARGS,
         .ml_doc = "version() -> str\n\nReturn the Nano-FFI library version.",
+    },
+    .{
+        .ml_name = "list_functions",
+        .ml_meth = py_list_functions,
+        .ml_flags = py.METH_NOARGS,
+        .ml_doc = "list_functions() -> list[str]\n\nNames of every registered Zig function.",
+    },
+    .{
+        .ml_name = "signature",
+        .ml_meth = py_signature,
+        .ml_flags = py.METH_VARARGS,
+        .ml_doc = "signature(name) -> dict\n\nDescribe a function's argument names/types and return type.",
     },
     .{ .ml_name = null, .ml_meth = null, .ml_flags = 0, .ml_doc = null },
 };
