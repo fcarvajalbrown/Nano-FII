@@ -112,7 +112,7 @@ print(nano_ffi.list_functions())           # → ['add', 'mul', 'echo', ...]
 print(nano_ffi.signature("add"))           # → {'args': [('a', 'i64'), ('b', 'i64')], 'ret': 'i64'}
 
 # Check library version
-print(nano_ffi.version())                  # → "0.8.0"
+print(nano_ffi.version())                  # → "0.9.0"
 ```
 
 ### Registering your own Zig function
@@ -172,9 +172,10 @@ PYTHONPATH=. python tests/test_python.py
 
 - Supported argument types: `i64`, `i32`, `u64`, `u32`, `u8`, `f64`, `f32`, `bool`, `str`, `bytes`, `buffer` (zero-copy writable)
 - Max 8 arguments per function call
-- Linux wheels not yet available (coming in v0.9.0)
+- Max 8 values per multi-value return
+- Linux is buildable from source; pre-built Linux wheels ship via CI
 
-See [`ROADMAP.md`](ROADMAP.md) for the path to 1.0.
+See [`ROADMAP.md`](ROADMAP.md) for the path to 1.0 and [`docs/API.md`](docs/API.md) for the full API reference.
 
 ---
 

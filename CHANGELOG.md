@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0] — 2026-07-09
+
+### Added
+- `docs/API.md` — full API reference (functions, exceptions, type table, built-ins)
+- `benchmarks/benchmark.py` — micro-call overhead across representative call kinds vs a ctypes baseline
+- `.github/workflows/ci.yml` — build + test matrix on Linux, Windows, macOS; wheels built on `v*` tags
+
+### Changed
+- `build.zig` now emits an importable module on every OS: `nano_ffi.pyd` on Windows, `nano_ffi.so` on Linux and macOS (previously the non-Windows artifact was `libnano_ffi.*`, which Python could not import)
+
+### Notes
+- Linux is now buildable from source; pre-built Linux wheels follow via CI
+
 ## [0.8.0] — 2026-07-09
 
 ### Added

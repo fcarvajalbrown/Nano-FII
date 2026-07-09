@@ -31,7 +31,7 @@ except ImportError as e:
 # ---------------------------------------------------------------------------
 
 # Bump this in lockstep with src/version.zig on every release.
-EXPECTED_VERSION = "0.8.0"
+EXPECTED_VERSION = "0.9.0"
 
 
 class TestVersion(unittest.TestCase):

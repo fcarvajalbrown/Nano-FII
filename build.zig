@@ -38,17 +38,18 @@ pub fn build(b: *std.Build) void {
 
     lib.linker_allow_shlib_undefined = true;
 
-    if (os == .windows) {
-        const install_pyd = b.addInstallFileWithDir(
-            lib.getEmittedBin(),
-            .lib,
-            "nano_ffi.pyd",
-        );
-        install_pyd.step.dependOn(&lib.step);
-        b.getInstallStep().dependOn(&install_pyd.step);
-    } else {
-        b.installArtifact(lib);
-    }
+    // Emit a file CPython can import directly: nano_ffi.pyd on Windows,
+    // nano_ffi.so on Linux and macOS (Python extension modules use .so on
+    // macOS too, not .dylib). Without this the artifact would be named
+    // libnano_ffi.* and Python's import machinery would not find it.
+    const module_name = if (os == .windows) "nano_ffi.pyd" else "nano_ffi.so";
+    const install_module = b.addInstallFileWithDir(
+        lib.getEmittedBin(),
+        .lib,
+        module_name,
+    );
+    install_module.step.dependOn(&lib.step);
+    b.getInstallStep().dependOn(&install_module.step);
 
     // Pure-Zig unit tests. Uses test_root.zig (no <Python.h> dependency) so
     // `zig build test` runs without Python headers or libpython on the path.
