@@ -31,7 +31,7 @@ except ImportError as e:
 # ---------------------------------------------------------------------------
 
 # Bump this in lockstep with src/version.zig on every release.
-EXPECTED_VERSION = "0.4.0"
+EXPECTED_VERSION = "0.5.0"
 
 
 class TestVersion(unittest.TestCase):
@@ -103,6 +103,25 @@ class TestStringsAndBytes(unittest.TestCase):
     def test_str_arg_wrong_type_raises(self):
         with self.assertRaises((TypeError, ValueError)):
             nano_ffi.call("strlen", 123)
+
+
+class TestErrorPropagation(unittest.TestCase):
+    """v0.5.0: Zig error unions surface as Python exceptions."""
+
+    def test_div_ok(self):
+        self.assertEqual(nano_ffi.call("div", 10, 2), 5)
+
+    def test_div_by_zero_raises_runtime_error(self):
+        with self.assertRaises(RuntimeError):
+            nano_ffi.call("div", 10, 0)
+
+    def test_div_by_zero_message_is_zig_error_name(self):
+        try:
+            nano_ffi.call("div", 1, 0)
+        except RuntimeError as e:
+            self.assertEqual(str(e), "DivisionByZero")
+        else:
+            self.fail("expected RuntimeError")
 
 
 # ---------------------------------------------------------------------------

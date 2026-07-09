@@ -94,8 +94,14 @@ print(nano_ffi.call("strlen", "hello"))    # → 5
 # String round-trip (UTF-8 preserved)
 print(nano_ffi.call("echo", "Ñuñoa"))      # → "Ñuñoa"
 
+# Zig errors become Python exceptions
+try:
+    nano_ffi.call("div", 10, 0)
+except RuntimeError as e:
+    print(e)                               # → "DivisionByZero"
+
 # Check library version
-print(nano_ffi.version())                  # → "0.4.0"
+print(nano_ffi.version())                  # → "0.5.0"
 ```
 
 ### Registering your own Zig function

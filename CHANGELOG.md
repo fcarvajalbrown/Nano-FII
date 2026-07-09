@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0] — 2026-07-09
+
+### Added
+- Zig error unions (`E!T`) are now first-class: a returned error surfaces as a Python `RuntimeError` carrying the Zig `@errorName` (e.g. `DivisionByZero`)
+- `RawRet` gains an error channel (`err_ptr` / `err_len`); `err_ptr == null` means success
+- The trampoline unwraps error unions at comptime — non-fallible functions keep the branch-free path
+- Built-in fallible example `div` (raises on divide-by-zero)
+
+### Changed
+- Conversion failures already raised precise `ValueError`/`TypeError` (v0.3.0); runtime Zig errors now raise instead of returning a zero value
+
 ## [0.4.0] — 2026-07-09
 
 ### Added

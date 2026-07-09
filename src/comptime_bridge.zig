@@ -71,7 +71,26 @@ pub fn makeTrampoline(
                 }
                 break :comptime_call @call(.auto, func, typed_args);
             };
-            return pack(sig.ret, result);
+
+            // If the wrapped function returns an error union, unwrap it: on
+            // error, carry @errorName back so python_ext can raise. The branch
+            // is resolved at comptime — non-erroring functions keep the
+            // straight-line path with no runtime check.
+            if (comptime @typeInfo(@TypeOf(result)) == .error_union) {
+                if (result) |ok| {
+                    return pack(sig.ret, ok);
+                } else |err| {
+                    const name = @errorName(err);
+                    return .{
+                        .tag = sig.ret,
+                        .val = std.mem.zeroes(RawValue),
+                        .err_ptr = name.ptr,
+                        .err_len = name.len,
+                    };
+                }
+            } else {
+                return pack(sig.ret, result);
+            }
         }
 
         /// Cast the trampoline to a registry-compatible FnPtr.
@@ -114,9 +133,15 @@ pub const RawArg = extern struct {
 };
 
 /// A raw return value sent back to Python.
+///
+/// `err_ptr == null` means success and `val` holds the result. Otherwise the
+/// wrapped Zig function returned an error and `err_ptr[0..err_len]` is its
+/// `@errorName`; `val` is unspecified and must be ignored.
 pub const RawRet = extern struct {
     tag: ArgType,
     val: RawValue,
+    err_ptr: ?[*]const u8 = null,
+    err_len: usize = 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -205,6 +230,28 @@ test "trampoline: i32 subtract" {
     const args = [_]RawArg{ .{ .tag = .i32, .val = .{ .i32 = 10 } }, .{ .tag = .i32, .val = .{ .i32 = 3 } } };
     const ret = T.call(&args);
     try std.testing.expectEqual(@as(i32, 7), ret.val.i32);
+}
+
+fn divZ(a: i64, b: i64) error{DivByZero}!i64 {
+    if (b == 0) return error.DivByZero;
+    return @divTrunc(a, b);
+}
+
+test "trampoline: error union carries success value and error name" {
+    const T = makeTrampoline(divZ, .{
+        .args = &.{ .{ .name = "a", .typ = .i64 }, .{ .name = "b", .typ = .i64 } },
+        .ret = .i64,
+    });
+
+    const ok_args = [_]RawArg{ .{ .tag = .i64, .val = .{ .i64 = 10 } }, .{ .tag = .i64, .val = .{ .i64 = 2 } } };
+    const ok = T.call(&ok_args);
+    try std.testing.expect(ok.err_ptr == null);
+    try std.testing.expectEqual(@as(i64, 5), ok.val.i64);
+
+    const bad_args = [_]RawArg{ .{ .tag = .i64, .val = .{ .i64 = 10 } }, .{ .tag = .i64, .val = .{ .i64 = 0 } } };
+    const bad = T.call(&bad_args);
+    try std.testing.expect(bad.err_ptr != null);
+    try std.testing.expectEqualStrings("DivByZero", bad.err_ptr.?[0..bad.err_len]);
 }
 
 fn strLenZ(s: []const u8) i64 {

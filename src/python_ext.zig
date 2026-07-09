@@ -48,6 +48,10 @@ fn zigByteSum(b: []const u8) u64 {
     for (b) |x| sum += x;
     return sum;
 }
+fn zigCheckedDiv(a: i64, b: i64) error{DivisionByZero}!i64 {
+    if (b == 0) return error.DivisionByZero;
+    return @divTrunc(a, b);
+}
 
 const AddTrampoline = bridge.makeTrampoline(zigAdd, .{
     .args = &.{
@@ -94,6 +98,14 @@ const EchoTrampoline = bridge.makeTrampoline(zigEcho, .{
 const ByteSumTrampoline = bridge.makeTrampoline(zigByteSum, .{
     .args = &.{.{ .name = "b", .typ = .bytes }},
     .ret = .u64,
+});
+
+const DivTrampoline = bridge.makeTrampoline(zigCheckedDiv, .{
+    .args = &.{
+        .{ .name = "a", .typ = .i64 },
+        .{ .name = "b", .typ = .i64 },
+    },
+    .ret = .i64,
 });
 
 // ---------------------------------------------------------------------------
@@ -242,6 +254,19 @@ fn py_call(self: ?*py.PyObject, args: ?*py.PyObject) callconv(.c) ?*py.PyObject 
     const trampoline: *const fn ([*]const bridge.RawArg) callconv(.c) bridge.RawRet = @ptrCast(@alignCast(entry.ptr));
     const ret = trampoline(&raw_args);
 
+    // A Zig error union that resolved to an error surfaces as a Python
+    // RuntimeError carrying the Zig error name (e.g. "DivisionByZero").
+    if (ret.err_ptr) |p| {
+        const msg = py.PyUnicode_FromStringAndSize(@ptrCast(p), @intCast(ret.err_len));
+        if (msg) |m| {
+            py.PyErr_SetObject(py.PyExc_RuntimeError, m);
+            py.Py_DecRef(m);
+        } else {
+            _ = py.PyErr_SetString(py.PyExc_RuntimeError, "nano_ffi: zig function returned an error");
+        }
+        return null;
+    }
+
     return rawRetToPy(ret);
 }
 
@@ -306,6 +331,7 @@ pub fn init() ?*py.PyObject {
     global_registry.register("strlen", StrLenTrampoline.asPtr(), StrLenTrampoline.sig) catch return null;
     global_registry.register("echo", EchoTrampoline.asPtr(), EchoTrampoline.sig) catch return null;
     global_registry.register("bytesum", ByteSumTrampoline.asPtr(), ByteSumTrampoline.sig) catch return null;
+    global_registry.register("div", DivTrampoline.asPtr(), DivTrampoline.sig) catch return null;
 
     return py.PyModule_Create(&module_def);
 }
