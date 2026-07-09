@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.0] — 2026-07-09
+
+### Added
+- `buffer` argument kind: a writable Python buffer (bytearray, writable memoryview, NumPy array, ...) is handed to Zig as a mutable `[]u8` pointing straight at Python's memory — no copy
+- Buffers are acquired via `PyObject_GetBuffer(PyBUF_WRITABLE)` and released after the call; teardown is centralised in `releaseViews`
+- Built-in examples `fill` (writes a byte value across the buffer in place) and `bufmax` (reads the max byte)
+
+### Notes
+- Buffer arguments require a *writable* buffer; passing an immutable object (e.g. `bytes`) raises `BufferError`, as expected
+
 ## [0.7.0] — 2026-07-09
 
 ### Added

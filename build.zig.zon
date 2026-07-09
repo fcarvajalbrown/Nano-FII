@@ -1,6 +1,6 @@
 .{
     .name = .nano_ffi,
-    .version = "0.7.0",
+    .version = "0.8.0",
     .fingerprint = 0x7ce319bc8c92ee13,
     .minimum_zig_version = "0.15.0",
     .dependencies = .{},

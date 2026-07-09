@@ -26,6 +26,10 @@ pub const ArgType = enum(u8) {
     // bytes = raw). See RawSlice for the C-ABI-safe representation.
     str,
     bytes,
+    // A writable, zero-copy view into a Python buffer (bytearray, writable
+    // memoryview, NumPy array, ...). Unpacks to a mutable `[]u8` pointing
+    // straight at Python's memory; the buffer is released after the call.
+    buffer,
 };
 
 /// Descriptor for a single function argument.
@@ -189,6 +193,7 @@ inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
     .f32 => f32,
     .u8 => u8,
     .str, .bytes => []const u8,
+    .buffer => []u8,
 } {
     return switch (typ) {
         .i64 => arg.val.i64,
@@ -200,6 +205,8 @@ inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
         .f32 => arg.val.f32,
         .u8 => arg.val.u8,
         .str, .bytes => arg.val.slice.ptr[0..arg.val.slice.len],
+        // The underlying Python buffer is writable; const-cast is sound here.
+        .buffer => @constCast(arg.val.slice.ptr[0..arg.val.slice.len]),
     };
 }
 
@@ -216,6 +223,9 @@ inline fn pack(comptime typ: ArgType, value: anytype) RawRet {
         .u8 => .{ .tag = .u8, .val = .{ .u8 = value } },
         .str => .{ .tag = .str, .val = .{ .slice = .{ .ptr = value.ptr, .len = value.len } } },
         .bytes => .{ .tag = .bytes, .val = .{ .slice = .{ .ptr = value.ptr, .len = value.len } } },
+        // `buffer` is an argument-only kind (zero-copy, in-place); a function
+        // never *returns* one, so it is never packed.
+        .buffer => unreachable,
     };
 }
 
@@ -260,6 +270,26 @@ test "trampoline: i32 subtract" {
     const args = [_]RawArg{ .{ .tag = .i32, .val = .{ .i32 = 10 } }, .{ .tag = .i32, .val = .{ .i32 = 3 } } };
     const ret = T.call(&args);
     try std.testing.expectEqual(@as(i32, 7), ret.val.i32);
+}
+
+fn fillZ(buf: []u8, val: u8) u64 {
+    for (buf) |*b| b.* = val;
+    return buf.len;
+}
+
+test "trampoline: writable buffer mutates in place, zero copy" {
+    const T = makeTrampoline(fillZ, .{
+        .args = &.{ .{ .name = "buf", .typ = .buffer }, .{ .name = "val", .typ = .u8 } },
+        .ret = .u64,
+    });
+    var mem = [_]u8{ 0, 0, 0, 0 };
+    const args = [_]RawArg{
+        .{ .tag = .buffer, .val = .{ .slice = .{ .ptr = &mem, .len = mem.len } } },
+        .{ .tag = .u8, .val = .{ .u8 = 7 } },
+    };
+    const ret = T.call(&args);
+    try std.testing.expectEqual(@as(u64, 4), ret.val.u64);
+    for (mem) |b| try std.testing.expectEqual(@as(u8, 7), b);
 }
 
 fn divModZ(a: i64, b: i64) struct { i64, i64 } {

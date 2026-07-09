@@ -103,12 +103,16 @@ except RuntimeError as e:
 # Multiple return values come back as a tuple
 q, r = nano_ffi.call("divmod", 17, 5)      # → (3, 2)
 
+# Zero-copy: Zig writes straight into a Python buffer
+buf = bytearray(4)
+nano_ffi.call("fill", buf, 7)              # buf is now bytearray(b'\x07\x07\x07\x07')
+
 # Introspect the registry
 print(nano_ffi.list_functions())           # → ['add', 'mul', 'echo', ...]
 print(nano_ffi.signature("add"))           # → {'args': [('a', 'i64'), ('b', 'i64')], 'ret': 'i64'}
 
 # Check library version
-print(nano_ffi.version())                  # → "0.7.0"
+print(nano_ffi.version())                  # → "0.8.0"
 ```
 
 ### Registering your own Zig function
@@ -166,7 +170,7 @@ PYTHONPATH=. python tests/test_python.py
 
 ## Current limitations
 
-- Supported argument types: `i64`, `i32`, `u64`, `u32`, `u8`, `f64`, `f32`, `bool`, `str`, `bytes`
+- Supported argument types: `i64`, `i32`, `u64`, `u32`, `u8`, `f64`, `f32`, `bool`, `str`, `bytes`, `buffer` (zero-copy writable)
 - Max 8 arguments per function call
 - Linux wheels not yet available (coming in v0.9.0)
 

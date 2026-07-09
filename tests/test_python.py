@@ -31,7 +31,7 @@ except ImportError as e:
 # ---------------------------------------------------------------------------
 
 # Bump this in lockstep with src/version.zig on every release.
-EXPECTED_VERSION = "0.7.0"
+EXPECTED_VERSION = "0.8.0"
 
 
 class TestVersion(unittest.TestCase):
@@ -171,6 +171,34 @@ class TestMultiReturn(unittest.TestCase):
     def test_signmag_mixed_types(self):
         self.assertEqual(nano_ffi.call("signmag", -42), (True, 42))
         self.assertEqual(nano_ffi.call("signmag", 7), (False, 7))
+
+
+class TestZeroCopyBuffers(unittest.TestCase):
+    """v0.8.0: writable Python buffers are mutated in place, no copy."""
+
+    def test_fill_mutates_bytearray_in_place(self):
+        buf = bytearray(4)
+        n = nano_ffi.call("fill", buf, 7)
+        self.assertEqual(n, 4)
+        self.assertEqual(buf, bytearray(b"\x07\x07\x07\x07"))
+
+    def test_fill_returns_length(self):
+        buf = bytearray(10)
+        self.assertEqual(nano_ffi.call("fill", buf, 1), 10)
+
+    def test_bufmax_reads_buffer(self):
+        buf = bytearray(b"\x03\x09\x01")
+        self.assertEqual(nano_ffi.call("bufmax", buf), 9)
+
+    def test_fill_via_memoryview(self):
+        buf = bytearray(3)
+        nano_ffi.call("fill", memoryview(buf), 5)
+        self.assertEqual(buf, bytearray(b"\x05\x05\x05"))
+
+    def test_readonly_buffer_rejected(self):
+        # bytes is immutable; PyBUF_WRITABLE must fail.
+        with self.assertRaises((BufferError, TypeError)):
+            nano_ffi.call("fill", b"abcd", 0)
 
 
 # ---------------------------------------------------------------------------

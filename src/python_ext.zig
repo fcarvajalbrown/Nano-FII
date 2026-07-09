@@ -58,6 +58,17 @@ fn zigDivMod(a: i64, b: i64) struct { i64, i64 } {
 fn zigSignMag(x: i64) struct { bool, u64 } {
     return .{ x < 0, @abs(x) };
 }
+fn zigFill(buf: []u8, val: u8) u64 {
+    for (buf) |*b| b.* = val;
+    return buf.len;
+}
+fn zigBufMax(buf: []const u8) u8 {
+    var m: u8 = 0;
+    for (buf) |b| {
+        if (b > m) m = b;
+    }
+    return m;
+}
 
 const AddTrampoline = bridge.makeTrampoline(zigAdd, .{
     .args = &.{
@@ -127,6 +138,19 @@ const SignMagTrampoline = bridge.makeTrampoline(zigSignMag, .{
     .rets = &.{ .bool, .u64 },
 });
 
+const FillTrampoline = bridge.makeTrampoline(zigFill, .{
+    .args = &.{
+        .{ .name = "buf", .typ = .buffer },
+        .{ .name = "val", .typ = .u8 },
+    },
+    .ret = .u64,
+});
+
+const BufMaxTrampoline = bridge.makeTrampoline(zigBufMax, .{
+    .args = &.{.{ .name = "buf", .typ = .buffer }},
+    .ret = .u8,
+});
+
 // ---------------------------------------------------------------------------
 // Helper: PyObject* → RawArg
 // ---------------------------------------------------------------------------
@@ -173,6 +197,9 @@ fn pyToRawArg(obj: *py.PyObject, typ: bridge.ArgType) !bridge.RawArg {
         .bool => .{ .tag = .bool, .val = .{ .bool = py.PyObject_IsTrue(obj) == 1 } },
         .str => try strToRawArg(obj),
         .bytes => try bytesToRawArg(obj),
+        // Buffers are acquired/released in py_call (they need explicit
+        // teardown after the trampoline runs), never through this path.
+        .buffer => error.ConversionFailed,
     };
 }
 
@@ -224,7 +251,15 @@ fn rawRetToPy(ret: bridge.RawRet) ?*py.PyObject {
         // Both copy the bytes into a new, Python-owned object.
         .str => py.PyUnicode_FromStringAndSize(@ptrCast(ret.val.slice.ptr), @intCast(ret.val.slice.len)),
         .bytes => py.PyBytes_FromStringAndSize(@ptrCast(ret.val.slice.ptr), @intCast(ret.val.slice.len)),
+        // `buffer` is argument-only; never a return tag.
+        .buffer => null,
     };
+}
+
+// Release every Py_buffer acquired for the current call.
+fn releaseViews(views: *[8]py.Py_buffer, n: usize) void {
+    var j: usize = 0;
+    while (j < n) : (j += 1) py.PyBuffer_Release(&views[j]);
 }
 
 // ---------------------------------------------------------------------------
@@ -268,23 +303,49 @@ fn py_call(self: ?*py.PyObject, args: ?*py.PyObject) callconv(.c) ?*py.PyObject 
         return null;
     }
 
-    // Unpack Python args into RawArg array (max 8 args)
+    // Unpack Python args into RawArg array (max 8 args). Buffer arguments
+    // acquire a zero-copy view here and must be released after the call, so
+    // track the acquired Py_buffers and tear them down in one place.
     var raw_args: [8]bridge.RawArg = undefined;
+    var views: [8]py.Py_buffer = undefined;
+    var n_views: usize = 0;
+
     for (sig.args, 0..) |desc, i| {
-        const py_arg = py.PyTuple_GetItem(args, @intCast(i + 1)) orelse return null;
-        raw_args[i] = pyToRawArg(py_arg, desc.typ) catch {
-            // Preserve a precise exception already set by the converter
-            // (e.g. ValueError on out-of-range); only fall back otherwise.
-            if (py.PyErr_Occurred() == null) {
-                _ = py.PyErr_SetString(py.PyExc_TypeError, "nano_ffi: argument type mismatch");
-            }
+        const py_arg = py.PyTuple_GetItem(args, @intCast(i + 1)) orelse {
+            releaseViews(&views, n_views);
             return null;
         };
+
+        if (desc.typ == .buffer) {
+            if (py.PyObject_GetBuffer(py_arg, &views[n_views], py.PyBUF_WRITABLE) != 0) {
+                // GetBuffer set a BufferError (e.g. object is read-only).
+                releaseViews(&views, n_views);
+                return null;
+            }
+            raw_args[i] = .{ .tag = .buffer, .val = .{ .slice = .{
+                .ptr = @ptrCast(views[n_views].buf),
+                .len = @intCast(views[n_views].len),
+            } } };
+            n_views += 1;
+        } else {
+            raw_args[i] = pyToRawArg(py_arg, desc.typ) catch {
+                // Preserve a precise exception already set by the converter
+                // (e.g. ValueError on out-of-range); only fall back otherwise.
+                if (py.PyErr_Occurred() == null) {
+                    _ = py.PyErr_SetString(py.PyExc_TypeError, "nano_ffi: argument type mismatch");
+                }
+                releaseViews(&views, n_views);
+                return null;
+            };
+        }
     }
 
     // Call the trampoline
     const trampoline: *const fn ([*]const bridge.RawArg) callconv(.c) bridge.RawRet = @ptrCast(@alignCast(entry.ptr));
     const ret = trampoline(&raw_args);
+
+    // Zig is done with the buffers; release the views before marshalling.
+    releaseViews(&views, n_views);
 
     // A Zig error union that resolved to an error surfaces as a Python
     // RuntimeError carrying the Zig error name (e.g. "DivisionByZero").
@@ -471,6 +532,8 @@ pub fn init() ?*py.PyObject {
     global_registry.register("div", DivTrampoline.asPtr(), DivTrampoline.sig) catch return null;
     global_registry.register("divmod", DivModTrampoline.asPtr(), DivModTrampoline.sig) catch return null;
     global_registry.register("signmag", SignMagTrampoline.asPtr(), SignMagTrampoline.sig) catch return null;
+    global_registry.register("fill", FillTrampoline.asPtr(), FillTrampoline.sig) catch return null;
+    global_registry.register("bufmax", BufMaxTrampoline.asPtr(), BufMaxTrampoline.sig) catch return null;
 
     return py.PyModule_Create(&module_def);
 }
