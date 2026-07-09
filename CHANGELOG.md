@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0] — 2026-07-09
+
+### Added
+- Multi-value returns: a Zig function returning a tuple (e.g. `struct { i64, i64 }`) surfaces in Python as a tuple
+- `Signature.rets` (a `[]const ArgType`); when non-empty the trampoline packs each field, resolved at comptime
+- Built-in examples `divmod` (i64, i64) and `signmag` (bool, u64 — mixed types)
+- `signature()` reports a list of return types for multi-value functions
+
+### Changed
+- `Signature.ret` now defaults to `.i64` and is ignored when `rets` is non-empty
+- Single-return functions keep the branch-free hot path; the multi-return branch is comptime-gated
+
 ## [0.6.0] — 2026-07-09
 
 ### Added

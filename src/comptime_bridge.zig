@@ -35,10 +35,23 @@ pub const ArgDesc = struct {
 };
 
 /// Full signature descriptor passed to `makeTrampoline`.
+///
+/// A function returns either a single value (`ret`, with `rets` empty) or,
+/// when `rets` is non-empty, a Zig tuple whose fields map element-wise onto
+/// `rets` and surface in Python as a tuple.
 pub const Signature = struct {
     args: []const ArgDesc,
-    ret: ArgType,
+    ret: ArgType = .i64,
+    rets: []const ArgType = &.{},
 };
+
+/// Maximum number of values a multi-return function may hand back.
+pub const MAX_RETS = 8;
+
+/// Scratch buffer for multi-value returns. The GIL serialises calls, so a
+/// single module-global buffer is safe: python_ext reads it immediately after
+/// the trampoline returns, before any re-entry. Only used when `n_rets > 1`.
+pub var multi_ret: [MAX_RETS]RawRet = undefined;
 
 /// Comptime trampoline factory.
 ///
@@ -71,6 +84,20 @@ pub fn makeTrampoline(
                 }
                 break :comptime_call @call(.auto, func, typed_args);
             };
+
+            // Multi-value return: the function handed back a Zig tuple; pack
+            // each field into the shared buffer and flag the count. Resolved at
+            // comptime, so single-return functions never see this path.
+            if (comptime sig_param.rets.len > 0) {
+                inline for (sig_param.rets, 0..) |rt, i| {
+                    multi_ret[i] = pack(rt, result[i]);
+                }
+                return .{
+                    .tag = sig.ret,
+                    .val = std.mem.zeroes(RawValue),
+                    .n_rets = @intCast(sig_param.rets.len),
+                };
+            }
 
             // If the wrapped function returns an error union, unwrap it: on
             // error, carry @errorName back so python_ext can raise. The branch
@@ -142,6 +169,9 @@ pub const RawRet = extern struct {
     val: RawValue,
     err_ptr: ?[*]const u8 = null,
     err_len: usize = 0,
+    // 0 or 1 => a single value lives in `val`. >1 => the values live in
+    // `multi_ret[0..n_rets]` and Python builds a tuple from them.
+    n_rets: u8 = 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -230,6 +260,22 @@ test "trampoline: i32 subtract" {
     const args = [_]RawArg{ .{ .tag = .i32, .val = .{ .i32 = 10 } }, .{ .tag = .i32, .val = .{ .i32 = 3 } } };
     const ret = T.call(&args);
     try std.testing.expectEqual(@as(i32, 7), ret.val.i32);
+}
+
+fn divModZ(a: i64, b: i64) struct { i64, i64 } {
+    return .{ @divTrunc(a, b), @mod(a, b) };
+}
+
+test "trampoline: multi-value return packs into shared buffer" {
+    const T = makeTrampoline(divModZ, .{
+        .args = &.{ .{ .name = "a", .typ = .i64 }, .{ .name = "b", .typ = .i64 } },
+        .rets = &.{ .i64, .i64 },
+    });
+    const args = [_]RawArg{ .{ .tag = .i64, .val = .{ .i64 = 17 } }, .{ .tag = .i64, .val = .{ .i64 = 5 } } };
+    const ret = T.call(&args);
+    try std.testing.expectEqual(@as(u8, 2), ret.n_rets);
+    try std.testing.expectEqual(@as(i64, 3), multi_ret[0].val.i64);
+    try std.testing.expectEqual(@as(i64, 2), multi_ret[1].val.i64);
 }
 
 fn divZ(a: i64, b: i64) error{DivByZero}!i64 {

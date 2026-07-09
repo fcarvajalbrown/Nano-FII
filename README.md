@@ -100,12 +100,15 @@ try:
 except RuntimeError as e:
     print(e)                               # → "DivisionByZero"
 
+# Multiple return values come back as a tuple
+q, r = nano_ffi.call("divmod", 17, 5)      # → (3, 2)
+
 # Introspect the registry
 print(nano_ffi.list_functions())           # → ['add', 'mul', 'echo', ...]
 print(nano_ffi.signature("add"))           # → {'args': [('a', 'i64'), ('b', 'i64')], 'ret': 'i64'}
 
 # Check library version
-print(nano_ffi.version())                  # → "0.6.0"
+print(nano_ffi.version())                  # → "0.7.0"
 ```
 
 ### Registering your own Zig function

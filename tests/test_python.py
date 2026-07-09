@@ -31,7 +31,7 @@ except ImportError as e:
 # ---------------------------------------------------------------------------
 
 # Bump this in lockstep with src/version.zig on every release.
-EXPECTED_VERSION = "0.6.0"
+EXPECTED_VERSION = "0.7.0"
 
 
 class TestVersion(unittest.TestCase):
@@ -151,6 +151,26 @@ class TestIntrospection(unittest.TestCase):
     def test_signature_unknown_raises_key_error(self):
         with self.assertRaises(KeyError):
             nano_ffi.signature("does_not_exist")
+
+    def test_signature_multi_return_is_list(self):
+        sig = nano_ffi.signature("divmod")
+        self.assertEqual(sig["ret"], ["i64", "i64"])
+
+
+class TestMultiReturn(unittest.TestCase):
+    """v0.7.0: Zig tuple returns surface as Python tuples."""
+
+    def test_divmod(self):
+        self.assertEqual(nano_ffi.call("divmod", 17, 5), (3, 2))
+
+    def test_divmod_is_tuple(self):
+        result = nano_ffi.call("divmod", 10, 3)
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(result, (3, 1))
+
+    def test_signmag_mixed_types(self):
+        self.assertEqual(nano_ffi.call("signmag", -42), (True, 42))
+        self.assertEqual(nano_ffi.call("signmag", 7), (False, 7))
 
 
 # ---------------------------------------------------------------------------

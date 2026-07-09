@@ -52,6 +52,12 @@ fn zigCheckedDiv(a: i64, b: i64) error{DivisionByZero}!i64 {
     if (b == 0) return error.DivisionByZero;
     return @divTrunc(a, b);
 }
+fn zigDivMod(a: i64, b: i64) struct { i64, i64 } {
+    return .{ @divTrunc(a, b), @mod(a, b) };
+}
+fn zigSignMag(x: i64) struct { bool, u64 } {
+    return .{ x < 0, @abs(x) };
+}
 
 const AddTrampoline = bridge.makeTrampoline(zigAdd, .{
     .args = &.{
@@ -106,6 +112,19 @@ const DivTrampoline = bridge.makeTrampoline(zigCheckedDiv, .{
         .{ .name = "b", .typ = .i64 },
     },
     .ret = .i64,
+});
+
+const DivModTrampoline = bridge.makeTrampoline(zigDivMod, .{
+    .args = &.{
+        .{ .name = "a", .typ = .i64 },
+        .{ .name = "b", .typ = .i64 },
+    },
+    .rets = &.{ .i64, .i64 },
+});
+
+const SignMagTrampoline = bridge.makeTrampoline(zigSignMag, .{
+    .args = &.{.{ .name = "x", .typ = .i64 }},
+    .rets = &.{ .bool, .u64 },
 });
 
 // ---------------------------------------------------------------------------
@@ -180,6 +199,19 @@ fn bytesToRawArg(obj: *py.PyObject) !bridge.RawArg {
 // ---------------------------------------------------------------------------
 
 fn rawRetToPy(ret: bridge.RawRet) ?*py.PyObject {
+    // Multi-value return: build a Python tuple from the shared buffer.
+    if (ret.n_rets > 1) {
+        const tup = py.PyTuple_New(@intCast(ret.n_rets)) orelse return null;
+        var i: usize = 0;
+        while (i < ret.n_rets) : (i += 1) {
+            const item = rawRetToPy(bridge.multi_ret[i]) orelse {
+                py.Py_DecRef(tup);
+                return null;
+            };
+            _ = py.PyTuple_SetItem(tup, @intCast(i), item); // steals ref
+        }
+        return tup;
+    }
     return switch (ret.tag) {
         .i64 => py.PyLong_FromLongLong(ret.val.i64),
         .i32 => py.PyLong_FromLong(ret.val.i32),
@@ -348,10 +380,26 @@ fn py_signature(self: ?*py.PyObject, args: ?*py.PyObject) callconv(.c) ?*py.PyOb
     _ = py.PyDict_SetItemString(dict, "args", arg_list);
     py.Py_DecRef(arg_list);
 
-    const ret_ty = py.PyUnicode_FromString(@tagName(entry.sig.ret));
-    if (ret_ty) |r| {
-        _ = py.PyDict_SetItemString(dict, "ret", r);
-        py.Py_DecRef(r);
+    if (entry.sig.rets.len > 0) {
+        // Multi-value return: "ret" is a list of type names.
+        const ret_list = py.PyList_New(0);
+        if (ret_list) |rl| {
+            for (entry.sig.rets) |rt| {
+                const ty = py.PyUnicode_FromString(@tagName(rt));
+                if (ty) |t| {
+                    _ = py.PyList_Append(rl, t);
+                    py.Py_DecRef(t);
+                }
+            }
+            _ = py.PyDict_SetItemString(dict, "ret", rl);
+            py.Py_DecRef(rl);
+        }
+    } else {
+        const ret_ty = py.PyUnicode_FromString(@tagName(entry.sig.ret));
+        if (ret_ty) |r| {
+            _ = py.PyDict_SetItemString(dict, "ret", r);
+            py.Py_DecRef(r);
+        }
     }
     return dict;
 }
@@ -421,6 +469,8 @@ pub fn init() ?*py.PyObject {
     global_registry.register("echo", EchoTrampoline.asPtr(), EchoTrampoline.sig) catch return null;
     global_registry.register("bytesum", ByteSumTrampoline.asPtr(), ByteSumTrampoline.sig) catch return null;
     global_registry.register("div", DivTrampoline.asPtr(), DivTrampoline.sig) catch return null;
+    global_registry.register("divmod", DivModTrampoline.asPtr(), DivModTrampoline.sig) catch return null;
+    global_registry.register("signmag", SignMagTrampoline.asPtr(), SignMagTrampoline.sig) catch return null;
 
     return py.PyModule_Create(&module_def);
 }
