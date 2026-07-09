@@ -30,34 +30,51 @@ except ImportError as e:
 # Smoke tests
 # ---------------------------------------------------------------------------
 
+# Bump this in lockstep with src/version.zig on every release.
+EXPECTED_VERSION = "0.3.0"
+
+
 class TestVersion(unittest.TestCase):
     def test_version_returns_string(self):
         v = nano_ffi.version()
         self.assertIsInstance(v, str)
 
     def test_version_value(self):
-        self.assertEqual(nano_ffi.version(), "0.1.0")
+        self.assertEqual(nano_ffi.version(), EXPECTED_VERSION)
 
 
 class TestCallDispatch(unittest.TestCase):
-    """
-    These tests will raise NotImplementedError until TODO(day-3) is resolved
-    and full dispatch is wired in python_ext.zig.
-    """
-
     def test_call_unknown_function_raises_key_error(self):
         with self.assertRaises(KeyError):
             nano_ffi.call("nonexistent", 1, 2)
 
     def test_call_add_integers(self):
-        # Requires TODO(day-3) to be complete.
         result = nano_ffi.call("add", 3, 4)
         self.assertEqual(result, 7)
 
     def test_call_multiply_floats(self):
-        # Requires TODO(day-3) to be complete.
         result = nano_ffi.call("mul", 2.5, 4.0)
         self.assertAlmostEqual(result, 10.0)
+
+
+class TestScalarTypes(unittest.TestCase):
+    """v0.3.0: expanded scalar type system with range-checked narrowing."""
+
+    def test_call_add32(self):
+        self.assertEqual(nano_ffi.call("add32", 100, 23), 123)
+
+    def test_call_umul_u64(self):
+        # A value that exceeds i64 range but fits u64.
+        big = 2**40
+        self.assertEqual(nano_ffi.call("umul", big, 2), big * 2)
+
+    def test_i32_overflow_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            nano_ffi.call("add32", 2**40, 1)
+
+    def test_u64_negative_raises(self):
+        with self.assertRaises((ValueError, OverflowError)):
+            nano_ffi.call("umul", -1, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -134,11 +151,9 @@ def benchmark_ctypes_baseline():
 if __name__ == "__main__":
     print("=== Nano-FFI Test Suite ===\n")
 
-    # Run unit tests
+    # Run every TestCase defined in this module (new releases just add classes).
     loader = unittest.TestLoader()
-    suite  = unittest.TestSuite()
-    suite.addTests(loader.loadTestsFromTestCase(TestVersion))
-    suite.addTests(loader.loadTestsFromTestCase(TestCallDispatch))
+    suite  = loader.loadTestsFromModule(sys.modules[__name__])
 
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)

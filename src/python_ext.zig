@@ -7,6 +7,7 @@ const std = @import("std");
 const bridge = @import("comptime_bridge.zig");
 const reg = @import("registry.zig");
 const alloc = @import("allocator.zig");
+const version = @import("version.zig");
 
 const py = @cImport({
     @cDefine("PY_SSIZE_T_CLEAN", "1");
@@ -30,6 +31,12 @@ fn zigAdd(a: i64, b: i64) i64 {
 fn zigMul(a: f64, b: f64) f64 {
     return a * b;
 }
+fn zigAdd32(a: i32, b: i32) i32 {
+    return a + b;
+}
+fn zigUMul(a: u64, b: u64) u64 {
+    return a * b;
+}
 
 const AddTrampoline = bridge.makeTrampoline(zigAdd, .{
     .args = &.{
@@ -47,14 +54,65 @@ const MulTrampoline = bridge.makeTrampoline(zigMul, .{
     .ret = .f64,
 });
 
+const Add32Trampoline = bridge.makeTrampoline(zigAdd32, .{
+    .args = &.{
+        .{ .name = "a", .typ = .i32 },
+        .{ .name = "b", .typ = .i32 },
+    },
+    .ret = .i32,
+});
+
+const UMulTrampoline = bridge.makeTrampoline(zigUMul, .{
+    .args = &.{
+        .{ .name = "a", .typ = .u64 },
+        .{ .name = "b", .typ = .u64 },
+    },
+    .ret = .u64,
+});
+
 // ---------------------------------------------------------------------------
 // Helper: PyObject* → RawArg
 // ---------------------------------------------------------------------------
 
+// Range-checked signed conversion. A Python int outside the target width
+// raises ValueError instead of silently truncating.
+fn signedInRange(obj: *py.PyObject, comptime T: type) !T {
+    const v = py.PyLong_AsLongLong(obj);
+    if (v == -1 and py.PyErr_Occurred() != null) return error.ConversionFailed;
+    if (v < std.math.minInt(T) or v > std.math.maxInt(T)) {
+        _ = py.PyErr_SetString(py.PyExc_ValueError, "nano_ffi: integer argument out of range for target type");
+        return error.ConversionFailed;
+    }
+    return @intCast(v);
+}
+
+// Range-checked unsigned conversion for widths that fit in i64 (u8, u32).
+fn unsignedInRange(obj: *py.PyObject, comptime T: type) !T {
+    const v = py.PyLong_AsLongLong(obj);
+    if (v == -1 and py.PyErr_Occurred() != null) return error.ConversionFailed;
+    if (v < 0 or v > std.math.maxInt(T)) {
+        _ = py.PyErr_SetString(py.PyExc_ValueError, "nano_ffi: integer argument out of range for target type");
+        return error.ConversionFailed;
+    }
+    return @intCast(v);
+}
+
+// u64 needs the full unsigned-long-long range, above i64 max.
+fn convertU64(obj: *py.PyObject) !u64 {
+    const v = py.PyLong_AsUnsignedLongLong(obj);
+    if (py.PyErr_Occurred() != null) return error.ConversionFailed;
+    return @intCast(v);
+}
+
 fn pyToRawArg(obj: *py.PyObject, typ: bridge.ArgType) !bridge.RawArg {
     return switch (typ) {
-        .i64 => .{ .tag = .i64, .val = .{ .i64 = @intCast(py.PyLong_AsLongLong(obj)) } },
+        .i64 => .{ .tag = .i64, .val = .{ .i64 = try signedInRange(obj, i64) } },
+        .i32 => .{ .tag = .i32, .val = .{ .i32 = try signedInRange(obj, i32) } },
+        .u8 => .{ .tag = .u8, .val = .{ .u8 = try unsignedInRange(obj, u8) } },
+        .u32 => .{ .tag = .u32, .val = .{ .u32 = try unsignedInRange(obj, u32) } },
+        .u64 => .{ .tag = .u64, .val = .{ .u64 = try convertU64(obj) } },
         .f64 => .{ .tag = .f64, .val = .{ .f64 = py.PyFloat_AsDouble(obj) } },
+        .f32 => .{ .tag = .f32, .val = .{ .f32 = @floatCast(py.PyFloat_AsDouble(obj)) } },
         .bool => .{ .tag = .bool, .val = .{ .bool = py.PyObject_IsTrue(obj) == 1 } },
     };
 }
@@ -66,7 +124,12 @@ fn pyToRawArg(obj: *py.PyObject, typ: bridge.ArgType) !bridge.RawArg {
 fn rawRetToPy(ret: bridge.RawRet) ?*py.PyObject {
     return switch (ret.tag) {
         .i64 => py.PyLong_FromLongLong(ret.val.i64),
+        .i32 => py.PyLong_FromLong(ret.val.i32),
+        .u8 => py.PyLong_FromUnsignedLong(ret.val.u8),
+        .u32 => py.PyLong_FromUnsignedLong(ret.val.u32),
+        .u64 => py.PyLong_FromUnsignedLongLong(ret.val.u64),
         .f64 => py.PyFloat_FromDouble(ret.val.f64),
+        .f32 => py.PyFloat_FromDouble(@floatCast(ret.val.f32)),
         .bool => py.PyBool_FromLong(if (ret.val.bool) 1 else 0),
     };
 }
@@ -117,7 +180,11 @@ fn py_call(self: ?*py.PyObject, args: ?*py.PyObject) callconv(.c) ?*py.PyObject 
     for (sig.args, 0..) |desc, i| {
         const py_arg = py.PyTuple_GetItem(args, @intCast(i + 1)) orelse return null;
         raw_args[i] = pyToRawArg(py_arg, desc.typ) catch {
-            _ = py.PyErr_SetString(py.PyExc_TypeError, "nano_ffi: argument type mismatch");
+            // Preserve a precise exception already set by the converter
+            // (e.g. ValueError on out-of-range); only fall back otherwise.
+            if (py.PyErr_Occurred() == null) {
+                _ = py.PyErr_SetString(py.PyExc_TypeError, "nano_ffi: argument type mismatch");
+            }
             return null;
         };
     }
@@ -135,7 +202,7 @@ fn py_call(self: ?*py.PyObject, args: ?*py.PyObject) callconv(.c) ?*py.PyObject 
 
 fn py_version(self: ?*py.PyObject, _: ?*py.PyObject) callconv(.c) ?*py.PyObject {
     _ = self;
-    return py.PyUnicode_FromString("0.1.0");
+    return py.PyUnicode_FromString(version.literal);
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +252,8 @@ pub fn init() ?*py.PyObject {
     // Register built-in example functions
     global_registry.register("add", AddTrampoline.asPtr(), AddTrampoline.sig) catch return null;
     global_registry.register("mul", MulTrampoline.asPtr(), MulTrampoline.sig) catch return null;
+    global_registry.register("add32", Add32Trampoline.asPtr(), Add32Trampoline.sig) catch return null;
+    global_registry.register("umul", UMulTrampoline.asPtr(), UMulTrampoline.sig) catch return null;
 
     return py.PyModule_Create(&module_def);
 }

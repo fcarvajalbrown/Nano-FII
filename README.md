@@ -89,7 +89,7 @@ result = nano_ffi.call("add", 3, 4)        # → 7
 result = nano_ffi.call("mul", 2.5, 4.0)   # → 10.0
 
 # Check library version
-print(nano_ffi.version())                  # → "0.2.0"
+print(nano_ffi.version())                  # → "0.3.0"
 ```
 
 ### Registering your own Zig function
@@ -147,9 +147,11 @@ PYTHONPATH=. python tests/test_python.py
 
 ## Current limitations
 
-- Supported argument types: `i64`, `f64`, `bool` — slices and strings planned for v0.3.0
+- Supported argument types: `i64`, `i32`, `u64`, `u32`, `u8`, `f64`, `f32`, `bool` — strings and slices planned for v0.4.0
 - Max 8 arguments per function call
-- Linux wheels not yet available (coming in v0.3.0)
+- Linux wheels not yet available (coming in v0.9.0)
+
+See [`ROADMAP.md`](ROADMAP.md) for the path to 1.0.
 
 ---
 

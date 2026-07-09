@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.3.0] — 2026-07-09
+
+### Added
+- Expanded scalar type system: `i32`, `u32`, `u64`, `f32`, `u8` join `i64`, `f64`, `bool`
+- Range-checked narrowing on Python -> Zig integers: out-of-range values raise `ValueError` instead of silently truncating
+- `u64` conversion via `PyLong_AsUnsignedLongLong` (supports values above `i64` max)
+- Built-in example functions `add32` (i32) and `umul` (u64)
+- `src/version.zig` — single source of truth for the version string
+- `src/test_root.zig` — dedicated pure-Zig test root (no `<Python.h>` dependency)
+- `build_local.ps1` — reproducible local Windows build helper
+- `ROADMAP.md` — milestones from 0.2 to 1.0
+
+### Fixed
+- `version()` returned the stale `"0.1.0"`; now reads from `version.zig` (fixes the `0.1.0`/`0.2.0` drift)
+- `allocator.zig` test compared a non-optional pointer with `null` (Zig 0.15 compile error)
+- `zig build test` no longer pulls in `python_ext.zig`, so it runs without Python headers
+
+### Changed
+- Argument converters set precise Python exceptions; the dispatcher no longer overwrites them with a generic `TypeError`
+- Removed stale `TODO(day-3)` markers now that dispatch is wired
+- Python test runner auto-discovers all `TestCase` classes in the module
+
 ## [0.2.0] — 2026-03-15
 
 ### Added

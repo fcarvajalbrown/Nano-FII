@@ -86,7 +86,7 @@ test "buffer alloc and free" {
     defer buf.free();
 
     try std.testing.expectEqual(@as(usize, 64), buf.len());
-    try std.testing.expect(buf.ptr() != null);
+    try std.testing.expect(@intFromPtr(buf.ptr()) != 0);
 }
 
 test "buffer write and read" {

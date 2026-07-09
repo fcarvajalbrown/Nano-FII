@@ -10,6 +10,7 @@ pub const registry = @import("registry.zig");
 pub const bridge = @import("comptime_bridge.zig");
 pub const allocator = @import("allocator.zig");
 pub const python = @import("python_ext.zig");
+const version_mod = @import("version.zig");
 
 /// Force the linker to export PyInit_nano_ffi as an unmangled C symbol.
 /// A `pub const` alias is NOT sufficient — must be a real `export fn`.
@@ -17,7 +18,7 @@ pub export fn PyInit_nano_ffi() callconv(.c) ?*anyopaque {
     return python.init();
 }
 
-pub const version: []const u8 = "0.1.0";
+pub const version: []const u8 = version_mod.literal;
 
 test {
     std.testing.refAllDeclsRecursive(@This());

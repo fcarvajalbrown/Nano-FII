@@ -16,6 +16,11 @@ pub const ArgType = enum(u8) {
     i64,
     f64,
     bool,
+    i32,
+    u32,
+    u64,
+    f32,
+    u8,
     // Pointer types (e.g. slices) are handled separately — see SliceArg.
 };
 
@@ -82,6 +87,11 @@ pub const RawValue = extern union {
     i64: i64,
     f64: f64,
     bool: bool,
+    i32: i32,
+    u32: u32,
+    u64: u64,
+    f32: f32,
+    u8: u8,
 };
 
 /// A raw argument passed from Python.
@@ -105,11 +115,21 @@ inline fn unpack(comptime typ: ArgType, arg: RawArg) switch (typ) {
     .i64 => i64,
     .f64 => f64,
     .bool => bool,
+    .i32 => i32,
+    .u32 => u32,
+    .u64 => u64,
+    .f32 => f32,
+    .u8 => u8,
 } {
     return switch (typ) {
         .i64 => arg.val.i64,
         .f64 => arg.val.f64,
         .bool => arg.val.bool,
+        .i32 => arg.val.i32,
+        .u32 => arg.val.u32,
+        .u64 => arg.val.u64,
+        .f32 => arg.val.f32,
+        .u8 => arg.val.u8,
     };
 }
 
@@ -119,6 +139,11 @@ inline fn pack(comptime typ: ArgType, value: anytype) RawRet {
         .i64 => .{ .tag = .i64, .val = .{ .i64 = value } },
         .f64 => .{ .tag = .f64, .val = .{ .f64 = value } },
         .bool => .{ .tag = .bool, .val = .{ .bool = value } },
+        .i32 => .{ .tag = .i32, .val = .{ .i32 = value } },
+        .u32 => .{ .tag = .u32, .val = .{ .u32 = value } },
+        .u64 => .{ .tag = .u64, .val = .{ .u64 = value } },
+        .f32 => .{ .tag = .f32, .val = .{ .f32 = value } },
+        .u8 => .{ .tag = .u8, .val = .{ .u8 = value } },
     };
 }
 
@@ -145,6 +170,24 @@ test "trampoline: integer add" {
     const args = [_]RawArg{ .{ .tag = .i64, .val = .{ .i64 = 3 } }, .{ .tag = .i64, .val = .{ .i64 = 4 } } };
     const ret = T.call(&args);
     try std.testing.expectEqual(@as(i64, 7), ret.val.i64);
+}
+
+fn subI32(a: i32, b: i32) i32 {
+    return a - b;
+}
+
+test "trampoline: i32 subtract" {
+    const T = makeTrampoline(subI32, .{
+        .args = &.{
+            .{ .name = "a", .typ = .i32 },
+            .{ .name = "b", .typ = .i32 },
+        },
+        .ret = .i32,
+    });
+
+    const args = [_]RawArg{ .{ .tag = .i32, .val = .{ .i32 = 10 } }, .{ .tag = .i32, .val = .{ .i32 = 3 } } };
+    const ret = T.call(&args);
+    try std.testing.expectEqual(@as(i32, 7), ret.val.i32);
 }
 
 test "trampoline: float multiply" {
