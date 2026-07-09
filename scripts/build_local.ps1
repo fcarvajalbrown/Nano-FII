@@ -1,6 +1,8 @@
 # build_local.ps1 — reproducible local build of nano_ffi.pyd on this Windows box.
 # Uses the Zig 0.15.2 toolchain in LOCALAPPDATA and the active CPython's headers/libs.
+# Runnable from anywhere: it resolves the repo root (parent of scripts/) itself.
 $ErrorActionPreference = "Stop"
+Set-Location (Split-Path $PSScriptRoot -Parent)
 
 $zig = "$env:LOCALAPPDATA\zig-0.15.2\zig.exe"
 

@@ -6,8 +6,8 @@ build scripts. Each builder imports compute_results() from here, so the
 numbers reported in every journal version are produced from the live, built
 extension and can never drift out of sync with the code.
 
-Run `python build_local.ps1` (or `zig build -Doptimize=ReleaseFast`) first so a
-ReleaseFast nano_ffi module exists at the repo root or in zig-out/lib.
+Run `.\scripts\build_local.ps1` (or `zig build -Doptimize=ReleaseFast`) first so
+a ReleaseFast nano_ffi module exists at the repo root or in zig-out/lib.
 """
 
 import ctypes

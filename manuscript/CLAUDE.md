@@ -15,7 +15,7 @@ page size, fonts, margins, and reference style change per journal.
 
 - `results.py` — the single `compute_results()`; every build imports it, so the
   numbers come from the live ReleaseFast extension and cannot drift. Build the
-  extension first (`.\build_local.ps1` or `zig build -Doptimize=ReleaseFast`).
+  extension first (`.\scripts\build_local.ps1` or `zig build -Doptimize=ReleaseFast`).
 - `generate_figures.py`, `figures/` — figures regenerated from the live run.
 - `manuscript.md` — plain, humanized reading copy (source of the prose).
 - `build_docx.py` — renders one Word file per journal into `manuscript/<J>/`.

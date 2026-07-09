@@ -7,7 +7,7 @@ A minimalist Python-to-Zig FFI bridge using comptime trampolines. Python calls Z
 - Version: 1.0.0 (API frozen, semver from here)
 - Zig: 0.15.2 (pinned; local toolchain at %LOCALAPPDATA%\zig-0.15.2\zig.exe)
 - Status: Windows x64 confirmed working; Linux buildable from source; macOS via CI
-- Build locally with `.\build_local.ps1` (auto-detects Python include/libs/tag)
+- Build locally with `.\scripts\build_local.ps1` (auto-detects Python include/libs/tag)
 - Types: i64, i32, u64, u32, u8, f64, f32, bool, str, bytes, buffer (zero-copy)
 - API: call, version, list_functions, signature; errors -> KeyError/TypeError/ValueError/BufferError/RuntimeError
 - 42 Python tests + Zig unit tests (test_root.zig excludes python_ext); `zig build test`
