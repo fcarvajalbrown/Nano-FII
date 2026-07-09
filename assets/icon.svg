@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Nano-FFI logo">
+  <rect width="120" height="120" rx="26" fill="#0d1117"/>
+  <path d="M42 32 H30 V88 H42" fill="none" stroke="#4B8BBE" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M78 32 H90 V88 H78" fill="none" stroke="#4B8BBE" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M66 28 L45 64 H59 L54 92 L78 52 H62 Z" fill="#F7A41D"/>
+</svg>
