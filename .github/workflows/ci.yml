@@ -49,6 +49,11 @@ jobs:
           fi
           echo "$zigdir" >> "$GITHUB_PATH"
           "$zigdir/zig" version
+          # On macOS, Zig's native linker needs the SDK path to resolve
+          # libSystem when building the `zig build test` executable.
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            echo "SDKROOT=$(xcrun --show-sdk-path)" >> "$GITHUB_ENV"
+          fi
 
       - name: Resolve Python paths
         id: py
@@ -174,16 +179,48 @@ jobs:
       - name: Build extension + wheel
         shell: bash
         run: |
+          set -euo pipefail
+          # Force a single-arch platform tag. setup-python's CPython reports a
+          # `universal2` platform by default, which would mislabel our native
+          # single-arch .so as fat/universal and let pip install it on the
+          # wrong architecture. Pin the tag (and deployment target) per arch.
+          case "$RUNNER_ARCH" in
+            ARM64)
+              export MACOSX_DEPLOYMENT_TARGET=11.0
+              export _PYTHON_HOST_PLATFORM="macosx-11.0-arm64"
+              ;;
+            X64)
+              export MACOSX_DEPLOYMENT_TARGET=10.13
+              export _PYTHON_HOST_PLATFORM="macosx-10.13-x86_64"
+              ;;
+            *) echo "unsupported arch $RUNNER_ARCH" >&2; exit 1 ;;
+          esac
           inc="$(python -c 'import sysconfig; print(sysconfig.get_path("include"))')"
           zig build -Doptimize=ReleaseFast -Dpython-include="$inc"
           cp zig-out/lib/nano_ffi.so nano_ffi.so
+          file nano_ffi.so
           python -m pip install --upgrade build twine
           python -m build --wheel
 
       - name: Validate wheel
         shell: bash
         run: |
+          set -euo pipefail
           ls -la dist/
+          # Assert the tag is single-arch, not universal2.
+          case "$RUNNER_ARCH" in
+            ARM64) grep_arch=arm64 ;;
+            X64)   grep_arch=x86_64 ;;
+          esac
+          if ! ls dist/*"$grep_arch".whl >/dev/null 2>&1; then
+            echo "ERROR: expected a *_$grep_arch.whl, got:" >&2
+            ls dist/ >&2
+            exit 1
+          fi
+          if ls dist/*universal2*.whl >/dev/null 2>&1; then
+            echo "ERROR: produced a universal2 wheel from a single-arch build" >&2
+            exit 1
+          fi
           python -m twine check dist/*.whl
 
       - uses: actions/upload-artifact@v4
