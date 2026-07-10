@@ -14,7 +14,10 @@ build/
 .venv/
 venv/
 
-# LaTeX build artifacts (keep .tex, .cls, .sty, .pdf)
+# Manuscript / paper (LaTeX, DOCX, figures) — kept local, out of the public repo
+manuscript/
+
+# LaTeX build artifacts
 *.aux
 *.log
 *.out
