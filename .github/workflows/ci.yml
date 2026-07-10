@@ -49,11 +49,6 @@ jobs:
           fi
           echo "$zigdir" >> "$GITHUB_PATH"
           "$zigdir/zig" version
-          # On macOS, Zig's native linker needs the SDK path to resolve
-          # libSystem when building the `zig build test` executable.
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            echo "SDKROOT=$(xcrun --show-sdk-path)" >> "$GITHUB_ENV"
-          fi
 
       - name: Resolve Python paths
         id: py
@@ -66,7 +61,19 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          zig build -Doptimize=ReleaseFast -Dpython-include="${{ steps.py.outputs.include }}"
+          set -euo pipefail
+          # On macOS, pass an explicit Zig target so Zig links against its own
+          # bundled libSystem stub. A bare native `zig build` tries to use the
+          # runner's Xcode 26.5 SDK, which Zig 0.15.2 cannot link (undefined
+          # _abort/_free/... , even in Zig's own build runner).
+          targetflag=""
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            case "$RUNNER_ARCH" in
+              ARM64) targetflag="-Dtarget=aarch64-macos" ;;
+              X64)   targetflag="-Dtarget=x86_64-macos" ;;
+            esac
+          fi
+          zig build -Doptimize=ReleaseFast $targetflag -Dpython-include="${{ steps.py.outputs.include }}"
           cp zig-out/lib/nano_ffi.so nano_ffi.so
 
       - name: Build (Windows)
