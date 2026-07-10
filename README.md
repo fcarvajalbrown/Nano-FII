@@ -17,7 +17,7 @@
 
 ---
 
-**Nano-FFI** lets Python call [Zig](https://ziglang.org) functions at close to native speed. Where `ctypes` and `cffi` inspect argument types on every call, Nano-FFI uses Zig's `comptime` engine to generate a type-safe trampoline for each function at compile time. A scalar call costs about **90 ns** — roughly **3.5–4× less overhead than `ctypes`** — with support for strings, bytes, zero-copy buffers, multi-value returns, and Zig-error-to-Python-exception mapping.
+**Nano-FFI** lets Python call [Zig](https://ziglang.org) functions at close to native speed. Where `ctypes` and `cffi` inspect argument types on every call, Nano-FFI uses Zig's `comptime` engine to generate a type-safe trampoline for each function at compile time. A scalar call costs about **90 ns** — roughly **5× less overhead than `ctypes` and 2.5× less than `cffi`** — with support for strings, bytes, zero-copy buffers, multi-value returns, and Zig-error-to-Python-exception mapping.
 
 > **Zig performance. Python brain. Comptime safety.**
 
@@ -25,14 +25,14 @@
 
 | | Nano-FFI | `ctypes` | `cffi` | PyO3 / Cython |
 |---|---|---|---|---|
-| Scalar call overhead | **~90 ns** | ~333 ns* | runtime-inspected | compile-time typed |
+| Scalar call overhead | **~90 ns** | ~440 ns | ~225 ns | compile-time typed |
 | Type check location | **compile time** | every call | every call | compile time |
 | Native language | Zig | any C ABI | any C ABI | Rust / C |
 | Build step required | pre-built wheels | none | C compiler | Rust / C toolchain |
 | Zero-copy buffers | yes | manual | manual | yes |
 | Zig errors → Python exceptions | yes | no | no | n/a |
 
-<sub>*Nano-FFI and `ctypes` figures are measured by [this repo's benchmark](#benchmarks) on one machine; treat them as relative, not absolute.</sub>
+<sub>Overhead figures call the <em>same</em> native <code>add</code> on all three bridges, measured by [this repo's benchmark](#benchmarks) on one machine; treat them as relative, not absolute.</sub>
 
 If you write your native code in **Zig** and want the thinnest, fastest possible call path into it from Python, Nano-FFI is built for exactly that: the per-function trampoline is generated at `comptime`, so the hot path has no runtime type inspection and no branches to resolve.
 
@@ -125,17 +125,25 @@ Median per-call overhead, `ReleaseFast`, 100k iterations (CPython 3.14, Windows 
 
 | Call kind | Overhead |
 |---|---|
-| scalar (`add` i64) | ~94 ns |
+| scalar (`add` i64) | ~90 ns |
 | float (`mul` f64) | ~105 ns |
-| string (`strlen`) | ~91 ns |
+| string (`strlen`) | ~90 ns |
 | multi-return (`divmod`) | ~124 ns |
-| zero-copy buffer (`fill`) | ~125 ns |
-| **`ctypes` baseline** | **~333 ns** |
+| zero-copy buffer (`fill`) | ~120 ns |
 
-A scalar Nano-FFI call carries roughly **3.5–4× less overhead** than a minimal `ctypes` call. Reproduce with:
+**Head-to-head, same native function on all three bridges** — `add`, `strlen`, and `fill` are compiled once into a shared library and called through each binding, so the delta is pure call overhead:
+
+| Call kind | Nano-FFI | `ctypes` | `cffi` |
+|---|---|---|---|
+| scalar (`add` i64) | ~90 ns | ~440 ns | ~225 ns |
+| string (`strlen`) | ~90 ns | ~300 ns | ~220 ns |
+| zero-copy buffer (`fill`) | ~120 ns | ~590 ns | ~240 ns |
+
+A scalar Nano-FFI call carries roughly **5× less overhead than `ctypes` and 2.5× less than `cffi`** on the reference machine. Reproduce:
 
 ```bash
-python benchmarks/benchmark.py
+python benchmarks/benchmark.py                # per-kind overhead
+python benchmarks/benchmark_vs_libraries.py   # fair head-to-head vs ctypes/cffi
 ```
 
 Numbers are machine-dependent; the harness is the source of truth.
