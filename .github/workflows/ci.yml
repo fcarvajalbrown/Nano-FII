@@ -24,9 +24,31 @@ jobs:
           python-version: "3.12"
 
       - name: Install Zig 0.15.2
-        uses: mlugg/setup-zig@v1
-        with:
-          version: 0.15.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver=0.15.2
+          case "$RUNNER_OS-$RUNNER_ARCH" in
+            Linux-X64)   file=zig-x86_64-linux-$ver.tar.xz ;;
+            macOS-ARM64) file=zig-aarch64-macos-$ver.tar.xz ;;
+            macOS-X64)   file=zig-x86_64-macos-$ver.tar.xz ;;
+            Windows-X64) file=zig-x86_64-windows-$ver.zip ;;
+            *) echo "unsupported $RUNNER_OS-$RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          url="https://ziglang.org/download/$ver/$file"
+          echo "Downloading $url"
+          dest="$RUNNER_TEMP/zig"
+          mkdir -p "$dest"
+          curl -fsSL -o "$RUNNER_TEMP/$file" "$url"
+          if [[ "$file" == *.zip ]]; then
+            unzip -q "$RUNNER_TEMP/$file" -d "$dest"
+            zigdir="$(find "$dest" -maxdepth 1 -type d -name 'zig-*' | head -n1)"
+          else
+            tar -xJf "$RUNNER_TEMP/$file" -C "$dest" --strip-components=1
+            zigdir="$dest"
+          fi
+          echo "$zigdir" >> "$GITHUB_PATH"
+          "$zigdir/zig" version
 
       - name: Resolve Python paths
         id: py
@@ -75,9 +97,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - uses: mlugg/setup-zig@v1
-        with:
-          version: 0.15.2
+
+      - name: Install Zig 0.15.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver=0.15.2
+          file=zig-x86_64-windows-$ver.zip
+          url="https://ziglang.org/download/$ver/$file"
+          dest="$RUNNER_TEMP/zig"; mkdir -p "$dest"
+          curl -fsSL -o "$RUNNER_TEMP/$file" "$url"
+          unzip -q "$RUNNER_TEMP/$file" -d "$dest"
+          zigdir="$(find "$dest" -maxdepth 1 -type d -name 'zig-*' | head -n1)"
+          echo "$zigdir" >> "$GITHUB_PATH"
+          "$zigdir/zig" version
 
       - name: Build extension + wheel
         shell: bash
@@ -120,9 +153,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - uses: mlugg/setup-zig@v1
-        with:
-          version: 0.15.2
+
+      - name: Install Zig 0.15.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver=0.15.2
+          case "$RUNNER_ARCH" in
+            ARM64) file=zig-aarch64-macos-$ver.tar.xz ;;
+            X64)   file=zig-x86_64-macos-$ver.tar.xz ;;
+            *) echo "unsupported arch $RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          url="https://ziglang.org/download/$ver/$file"
+          dest="$RUNNER_TEMP/zig"; mkdir -p "$dest"
+          curl -fsSL -o "$RUNNER_TEMP/$file" "$url"
+          tar -xJf "$RUNNER_TEMP/$file" -C "$dest" --strip-components=1
+          echo "$dest" >> "$GITHUB_PATH"
+          "$dest/zig" version
 
       - name: Build extension + wheel
         shell: bash
@@ -200,22 +247,16 @@ jobs:
           path: wheelhouse/*.whl
 
   # ---------------------------------------------------------------------------
-  # Publish to PyPI via Trusted Publishing (OIDC). No token/secret is used.
+  # Publish to PyPI using an API token stored as the PYPI_API_TOKEN secret.
   # Only runs for pushed tags (refs/tags/v*) or manual workflow_dispatch, and
   # only after every wheel job succeeds. On normal branch pushes / PRs the
   # `if:` is false so this job is SKIPPED (it does not gate the wheel matrix).
-  #
-  # NOTE: this will fail at the OIDC step until a PyPI trusted publisher is
-  # registered for project `nano-ffi` and the `pypi` environment exists.
   # ---------------------------------------------------------------------------
   publish:
-    name: publish to PyPI (trusted publishing)
+    name: publish to PyPI
     needs: [wheels-windows, wheels-macos, wheels-linux]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
     steps:
       - name: Download all wheel artifacts
         uses: actions/download-artifact@v4
@@ -229,3 +270,5 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
