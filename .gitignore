@@ -30,5 +30,10 @@ manuscript/
 .DS_Store
 Thumbs.db
 
+# Secrets — never commit
+.env
+.env.*
+*.pem
+
 # Self
 notes.txt
