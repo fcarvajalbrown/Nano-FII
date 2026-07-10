@@ -9,6 +9,7 @@
   <a href="https://pypi.org/project/nano-ffi/"><img src="https://img.shields.io/pypi/v/nano-ffi?style=flat-square&color=F7A41D" alt="PyPI"/></a>
   <a href="https://pypi.org/project/nano-ffi/"><img src="https://img.shields.io/pypi/dm/nano-ffi?style=flat-square&color=F7A41D" alt="Downloads"/></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-F7A41D?style=flat-square" alt="Python 3.10+"/>
+  <img src="https://img.shields.io/badge/zig-0.15.2-F7A41D?style=flat-square&logo=zig&logoColor=white" alt="Zig 0.15.2"/>
   <img src="https://img.shields.io/badge/license-MIT-F7A41D?style=flat-square" alt="License: MIT"/>
 </p>
 
@@ -20,8 +21,24 @@
 
 > **Zig performance. Python brain. Comptime safety.**
 
+## Why Nano-FFI?
+
+| | Nano-FFI | `ctypes` | `cffi` | PyO3 / Cython |
+|---|---|---|---|---|
+| Scalar call overhead | **~90 ns** | ~333 ns* | runtime-inspected | compile-time typed |
+| Type check location | **compile time** | every call | every call | compile time |
+| Native language | Zig | any C ABI | any C ABI | Rust / C |
+| Build step required | pre-built wheels | none | C compiler | Rust / C toolchain |
+| Zero-copy buffers | yes | manual | manual | yes |
+| Zig errors → Python exceptions | yes | no | no | n/a |
+
+<sub>*Nano-FFI and `ctypes` figures are measured by [this repo's benchmark](#benchmarks) on one machine; treat them as relative, not absolute.</sub>
+
+If you write your native code in **Zig** and want the thinnest, fastest possible call path into it from Python, Nano-FFI is built for exactly that: the per-function trampoline is generated at `comptime`, so the hot path has no runtime type inspection and no branches to resolve.
+
 ## Contents
 
+- [Why Nano-FFI?](#why-nano-ffi)
 - [Install](#install)
 - [Quickstart](#quickstart)
 - [Supported types](#supported-types)
