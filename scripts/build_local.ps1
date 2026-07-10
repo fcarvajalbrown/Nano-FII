@@ -25,3 +25,10 @@ if ($LASTEXITCODE -ne 0) { throw "zig build failed ($LASTEXITCODE)" }
 
 Copy-Item "zig-out\lib\nano_ffi.pyd" "nano_ffi.pyd" -Force
 Write-Host "OK -> nano_ffi.pyd"
+
+# Also build the benchmark shared library used by
+# benchmarks\benchmark_vs_libraries.py (apples-to-apples vs. ctypes/cffi).
+# Emits zig-out\bin\nano_ffi_benchlib.dll. Not part of the Python package.
+& $zig build benchlib -Doptimize=ReleaseFast
+if ($LASTEXITCODE -ne 0) { throw "zig build benchlib failed ($LASTEXITCODE)" }
+Write-Host "OK -> zig-out\bin\nano_ffi_benchlib.dll"

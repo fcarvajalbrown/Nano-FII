@@ -51,6 +51,31 @@ pub fn build(b: *std.Build) void {
     install_module.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&install_module.step);
 
+    // -----------------------------------------------------------------------
+    // benchlib — a tiny plain-C-ABI shared library used ONLY by the
+    // apples-to-apples binding-overhead benchmark
+    // (benchmarks/benchmark_vs_libraries.py). It exports add/strlen/fill with
+    // the same semantics as Nano-FFI's built-ins so ctypes and cffi can bind
+    // to the exact same native work. Not part of the Python package.
+    //
+    // Emitted as nano_ffi_benchlib.dll (Windows) / libnano_ffi_benchlib.so
+    // (Linux) / libnano_ffi_benchlib.dylib (macOS) into zig-out/lib.
+    //
+    // Build with:  zig build benchlib -Doptimize=ReleaseFast
+    const benchlib_mod = b.createModule(.{
+        .root_source_file = b.path("src/benchlib.zig"),
+        .target           = target,
+        .optimize         = optimize,
+    });
+    const benchlib = b.addLibrary(.{
+        .name        = "nano_ffi_benchlib",
+        .root_module = benchlib_mod,
+        .linkage     = .dynamic,
+    });
+    const install_benchlib = b.addInstallArtifact(benchlib, .{});
+    const benchlib_step = b.step("benchlib", "Build the benchmark shared library (nano_ffi_benchlib)");
+    benchlib_step.dependOn(&install_benchlib.step);
+
     // Pure-Zig unit tests. Uses test_root.zig (no <Python.h> dependency) so
     // `zig build test` runs without Python headers or libpython on the path.
     const unit_tests = b.addTest(.{
