@@ -6,6 +6,7 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build-test:
@@ -58,20 +59,22 @@ jobs:
       - name: Python end-to-end tests
         run: python tests/test_python.py
 
-  wheels:
-    name: wheel (${{ matrix.os }})
-    needs: build-test
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ${{ matrix.os }}
+  # ---------------------------------------------------------------------------
+  # Windows wheels: native build per Python, tagged cpXY-cpXY-win_amd64.
+  # PyPI-valid as produced by `python -m build --wheel`.
+  # ---------------------------------------------------------------------------
+  wheels-windows:
+    name: wheel (windows, py${{ matrix.python }})
+    runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - uses: mlugg/setup-zig@v1
         with:
           version: 0.15.2
@@ -80,19 +83,149 @@ jobs:
         shell: bash
         run: |
           inc="$(python -c 'import sysconfig; print(sysconfig.get_path("include"))')"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            base="$(python -c 'import sysconfig, os; print(os.path.dirname(sysconfig.get_path("include")))')"
-            tag="python$(python -c 'import sys; print(f"{sys.version_info.major}{sys.version_info.minor}")')"
-            zig build -Doptimize=ReleaseFast -Dpython-include="$inc" -Dpython-lib="$base/libs" -Dpython-libname="$tag"
-            cp zig-out/lib/nano_ffi.pyd nano_ffi.pyd
-          else
-            zig build -Doptimize=ReleaseFast -Dpython-include="$inc"
-            cp zig-out/lib/nano_ffi.so nano_ffi.so
-          fi
-          python -m pip install --upgrade build
+          base="$(python -c 'import sysconfig, os; print(os.path.dirname(sysconfig.get_path("include")))')"
+          tag="python$(python -c 'import sys; print(f"{sys.version_info.major}{sys.version_info.minor}")')"
+          zig build -Doptimize=ReleaseFast -Dpython-include="$inc" -Dpython-lib="$base/libs" -Dpython-libname="$tag"
+          cp zig-out/lib/nano_ffi.pyd nano_ffi.pyd
+          python -m pip install --upgrade build twine
           python -m build --wheel
+
+      - name: Validate wheel
+        shell: bash
+        run: |
+          ls -la dist/
+          python -m twine check dist/*.whl
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheel-${{ matrix.os }}
+          name: wheel-windows-py${{ matrix.python }}
           path: dist/*.whl
+
+  # ---------------------------------------------------------------------------
+  # macOS wheels: native per-arch builds.
+  #   macos-14 -> Apple silicon (arm64)
+  #   macos-13 -> Intel (x86_64)
+  # Each produces cpXY-cpXY-macosx_*_<arch>, PyPI-valid.
+  # ---------------------------------------------------------------------------
+  wheels-macos:
+    name: wheel (${{ matrix.runner }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-14, macos-13]
+        python: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: 0.15.2
+
+      - name: Build extension + wheel
+        shell: bash
+        run: |
+          inc="$(python -c 'import sysconfig; print(sysconfig.get_path("include"))')"
+          zig build -Doptimize=ReleaseFast -Dpython-include="$inc"
+          cp zig-out/lib/nano_ffi.so nano_ffi.so
+          python -m pip install --upgrade build twine
+          python -m build --wheel
+
+      - name: Validate wheel
+        shell: bash
+        run: |
+          ls -la dist/
+          python -m twine check dist/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.runner }}-py${{ matrix.python }}
+          path: dist/*.whl
+
+  # ---------------------------------------------------------------------------
+  # Linux wheels: built inside a manylinux_2_28 container. A plain
+  # linux_x86_64 wheel is rejected by PyPI, so we `auditwheel repair` the
+  # freshly built wheel into a manylinux_* wheel. Zig 0.15.2 is downloaded
+  # into the container (statically linked, glibc-independent).
+  # ---------------------------------------------------------------------------
+  wheels-linux:
+    name: wheel (manylinux, py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.12"
+            pybin: cp312-cp312
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig 0.15.2
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/zig.tar.xz https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz
+          mkdir -p /opt/zig
+          tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
+          /opt/zig/zig version
+
+      - name: Build extension + wheel + auditwheel repair
+        run: |
+          set -euo pipefail
+          export PATH="/opt/zig:/opt/python/${{ matrix.pybin }}/bin:$PATH"
+          PY=/opt/python/${{ matrix.pybin }}/bin/python
+          "$PY" --version
+          inc="$("$PY" -c 'import sysconfig; print(sysconfig.get_path("include"))')"
+          zig build -Doptimize=ReleaseFast -Dpython-include="$inc"
+          cp zig-out/lib/nano_ffi.so nano_ffi.so
+          "$PY" -m pip install --upgrade build auditwheel twine
+          "$PY" -m build --wheel
+          echo "=== raw wheel (linux_x86_64, not PyPI-valid) ==="
+          ls -la dist/
+          "$PY" -m auditwheel repair dist/*.whl -w wheelhouse/
+          echo "=== repaired wheel (manylinux, PyPI-valid) ==="
+          ls -la wheelhouse/
+          # Fail loudly if the repaired wheel is not manylinux-tagged.
+          if ! ls wheelhouse/*manylinux*.whl >/dev/null 2>&1; then
+            echo "ERROR: no manylinux wheel produced by auditwheel repair" >&2
+            exit 1
+          fi
+          "$PY" -m twine check wheelhouse/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-manylinux-py${{ matrix.python }}
+          path: wheelhouse/*.whl
+
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI via Trusted Publishing (OIDC). No token/secret is used.
+  # Only runs for pushed tags (refs/tags/v*) or manual workflow_dispatch, and
+  # only after every wheel job succeeds. On normal branch pushes / PRs the
+  # `if:` is false so this job is SKIPPED (it does not gate the wheel matrix).
+  #
+  # NOTE: this will fail at the OIDC step until a PyPI trusted publisher is
+  # registered for project `nano-ffi` and the `pypi` environment exists.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: publish to PyPI (trusted publishing)
+    needs: [wheels-windows, wheels-macos, wheels-linux]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist
+          merge-multiple: true
+
+      - name: List collected wheels
+        run: ls -la dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
